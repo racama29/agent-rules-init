@@ -55,4 +55,31 @@ describe("scanRepo", () => {
       expect(signals.packageJson?.name).toBe("root-project");
     });
   });
+
+  describe("with a root environment.yml and an unrelated nested pyproject.toml", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-conda-"));
+      fs.writeFileSync(
+        path.join(tmpDir, "environment.yml"),
+        "name: my_env\ndependencies:\n  - pip:\n    - flask"
+      );
+      fs.mkdirSync(path.join(tmpDir, "vendored-data"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "vendored-data", "pyproject.toml"),
+        '[project]\nname = "vendored-data"\ndependencies = []'
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("prefers the root-level environment.yml over a nested unrelated pyproject.toml", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.environmentYml).toContain("flask");
+      expect(signals.pyprojectToml).toBeUndefined();
+    });
+  });
 });

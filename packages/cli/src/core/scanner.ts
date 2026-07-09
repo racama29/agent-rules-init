@@ -61,6 +61,10 @@ function findFirstByExtension(files: string[], extension: string): string | unde
   return shallowest(files.filter((f) => f.toLowerCase().endsWith(extension)));
 }
 
+function pickShallowest(paths: (string | undefined)[]): string | undefined {
+  return shallowest(paths.filter((p): p is string => p !== undefined));
+}
+
 export function scanRepo(rootPath: string): RepoSignals {
   const files = walk(rootPath);
   const fileSet = new Set(files.map((f) => f.split(path.sep).join("/")));
@@ -89,9 +93,21 @@ export function scanRepo(rootPath: string): RepoSignals {
       }
     : undefined;
 
-  const pyprojectPath = findFirst(files, "pyproject.toml");
-  const requirementsPath = findFirst(files, "requirements.txt");
-  const environmentYmlPath = findFirst(files, "environment.yml") ?? findFirst(files, "environment.yaml");
+  const pyprojectCandidate = findFirst(files, "pyproject.toml");
+  const requirementsCandidate = findFirst(files, "requirements.txt");
+  const environmentYmlCandidate = findFirst(files, "environment.yml") ?? findFirst(files, "environment.yaml");
+  // Only the shallowest of the three "wins" as the project's Python manifest — otherwise an
+  // unrelated pyproject.toml nested inside a vendored/data subdirectory (e.g. a bundled dataset
+  // package) would always outrank a real root-level environment.yml just by file type.
+  const primaryPythonManifest = pickShallowest([
+    pyprojectCandidate,
+    requirementsCandidate,
+    environmentYmlCandidate,
+  ]);
+  const pyprojectPath = primaryPythonManifest === pyprojectCandidate ? pyprojectCandidate : undefined;
+  const requirementsPath = primaryPythonManifest === requirementsCandidate ? requirementsCandidate : undefined;
+  const environmentYmlPath =
+    primaryPythonManifest === environmentYmlCandidate ? environmentYmlCandidate : undefined;
   const pomPath = findFirst(files, "pom.xml");
   const buildGradlePath = findFirst(files, "build.gradle") ?? findFirst(files, "build.gradle.kts");
   const gemfilePath = findFirst(files, "Gemfile");
