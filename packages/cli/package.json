@@ -12,6 +12,27 @@
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/racama29/agent-rules-init.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/racama29/agent-rules-init#readme",
+  "bugs": {
+    "url": "https://github.com/racama29/agent-rules-init/issues"
+  },
+  "keywords": [
+    "cli",
+    "claude",
+    "claude-code",
+    "codex",
+    "copilot",
+    "ai-agents",
+    "agent-rules"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
@@ -19,11 +40,11 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",
-    "agent-rules-pack-java": "0.1.0",
-    "agent-rules-pack-js-ts": "0.1.0",
-    "agent-rules-pack-php": "0.1.0",
-    "agent-rules-pack-python": "0.1.0",
-    "agent-rules-pack-types": "0.1.0"
+    "agent-rules-pack-java": "0.1.1",
+    "agent-rules-pack-js-ts": "0.1.1",
+    "agent-rules-pack-php": "0.1.1",
+    "agent-rules-pack-python": "0.1.1",
+    "agent-rules-pack-types": "0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

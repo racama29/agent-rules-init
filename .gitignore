@@ -3,3 +3,4 @@ dist/
 *.generated.*
 !fixtures/**/*.generated.*
 .claude/
+.npmrc
