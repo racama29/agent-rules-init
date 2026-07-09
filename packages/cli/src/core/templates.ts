@@ -55,14 +55,17 @@ export function renderCopilotInstructions(entries: RenderEntry[]): string {
   ].join("\n");
 }
 
-export function renderPromptFiles(templates: PromptTemplate[]): { path: string; content: string }[] {
+export function renderPromptFiles(
+  packId: string,
+  templates: PromptTemplate[]
+): { path: string; content: string }[] {
   return templates.flatMap((template) => [
     {
-      path: `.claude/commands/${template.id}.generated.md`,
+      path: `.claude/commands/${packId}-${template.id}.generated.md`,
       content: `# ${template.title}\n\n${template.body}\n`,
     },
     {
-      path: `.github/prompts/${template.id}.generated.prompt.md`,
+      path: `.github/prompts/${packId}-${template.id}.generated.prompt.md`,
       content: `# ${template.title}\n\n${template.body}\n`,
     },
   ]);

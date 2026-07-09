@@ -31,14 +31,25 @@ describe("templates", () => {
     expect(content).toContain("Proyecto JavaScript/TypeScript con react.");
   });
 
-  it("renders one file per prompt template with claude and vscode paths", () => {
+  it("renders one file per prompt template with claude and vscode paths, namespaced by packId", () => {
     const templates: PromptTemplate[] = [{ id: "review", title: "Code Review (JS/TS)", body: "Revisa el diff." }];
-    const files = renderPromptFiles(templates);
+    const files = renderPromptFiles("js-ts", templates);
     const paths = files.map((f) => f.path).sort();
     expect(paths).toEqual([
-      ".claude/commands/review.generated.md",
-      ".github/prompts/review.generated.prompt.md",
+      ".claude/commands/js-ts-review.generated.md",
+      ".github/prompts/js-ts-review.generated.prompt.md",
     ]);
     expect(files[0].content).toContain("Revisa el diff.");
+  });
+
+  it("does not collide when two different packs render the same template id", () => {
+    const templates: PromptTemplate[] = [{ id: "review", title: "Code Review", body: "body" }];
+    const jsFiles = renderPromptFiles("js-ts", templates);
+    const pyFiles = renderPromptFiles("python", templates);
+    const jsPaths = new Set(jsFiles.map((f) => f.path));
+    const pyPaths = new Set(pyFiles.map((f) => f.path));
+    for (const path of pyPaths) {
+      expect(jsPaths.has(path)).toBe(false);
+    }
   });
 });
