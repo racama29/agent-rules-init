@@ -19,7 +19,6 @@ import {
   type PromptFn,
 } from "./core/prompt-engine.js";
 import { detectAvailableAssistants, polishWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
-import { renderAssistantGreeting } from "./core/greeting.js";
 import type { Pack } from "./core/types.js";
 import { jsTsPack } from "agent-rules-pack-js-ts";
 import { pythonPack } from "agent-rules-pack-python";
@@ -78,7 +77,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     const assistants = await detectAvailableAssistants(execFn);
     if (assistants.length > 0) {
       const chosenAssistant = assistants[0];
-      console.log(renderAssistantGreeting(chosenAssistant));
+      clack.log.info(`${chosenAssistant} detectado — puede ayudar a pulir la redacción final.`);
       const usePolish = await clack.confirm({
         message: `Se detectó ${chosenAssistant}. ¿Quieres que pula la redacción final?`,
       });
