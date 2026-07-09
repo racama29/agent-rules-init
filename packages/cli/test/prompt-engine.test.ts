@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { collectLowConfidenceQuestions, askQuestions } from "../src/core/prompt-engine.js";
+import { collectLowConfidenceQuestions, askQuestions, applyAnswers } from "../src/core/prompt-engine.js";
 import type { DetectionResult } from "../src/core/types.js";
 
 describe("collectLowConfidenceQuestions", () => {
@@ -44,5 +44,43 @@ describe("askQuestions", () => {
     );
     expect(promptFn).toHaveBeenCalledWith("¿Cuál framework?");
     expect(answers).toEqual({ "js-ts:framework": "express" });
+  });
+});
+
+describe("applyAnswers", () => {
+  it("overrides a low-confidence field with the user's answer at high confidence", () => {
+    const detections: DetectionResult[] = [
+      {
+        packId: "js-ts",
+        language: "TypeScript/JavaScript",
+        framework: { value: "none", confidence: "low" },
+      },
+    ];
+    const updated = applyAnswers(detections, { "js-ts:framework": "express" });
+    expect(updated[0].framework).toEqual({ value: "express", confidence: "high" });
+  });
+
+  it("leaves fields untouched when there is no matching answer", () => {
+    const detections: DetectionResult[] = [
+      {
+        packId: "js-ts",
+        language: "TypeScript/JavaScript",
+        framework: { value: "react", confidence: "high" },
+      },
+    ];
+    const updated = applyAnswers(detections, {});
+    expect(updated[0].framework).toEqual({ value: "react", confidence: "high" });
+  });
+
+  it("ignores an empty-string answer instead of overriding with a blank value", () => {
+    const detections: DetectionResult[] = [
+      {
+        packId: "js-ts",
+        language: "TypeScript/JavaScript",
+        framework: { value: "none", confidence: "low" },
+      },
+    ];
+    const updated = applyAnswers(detections, { "js-ts:framework": "" });
+    expect(updated[0].framework).toEqual({ value: "none", confidence: "low" });
   });
 });

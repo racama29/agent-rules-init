@@ -32,7 +32,11 @@ export type PromptFn = (message: string) => Promise<string>;
 
 export const defaultPromptFn: PromptFn = async (message) => {
   const answer = await clack.text({ message });
-  return typeof answer === "string" ? answer : "";
+  if (clack.isCancel(answer)) {
+    clack.cancel("Operación cancelada.");
+    process.exit(1);
+  }
+  return answer;
 };
 
 export async function askQuestions(
@@ -44,4 +48,20 @@ export async function askQuestions(
     answers[`${question.packId}:${question.field}`] = await promptFn(question.message);
   }
   return answers;
+}
+
+export function applyAnswers(
+  detections: DetectionResult[],
+  answers: Record<string, string>
+): DetectionResult[] {
+  return detections.map((detection) => {
+    const updated = { ...detection };
+    for (const field of FIELDS) {
+      const answer = answers[`${detection.packId}:${field}`];
+      if (answer) {
+        updated[field] = { value: answer, confidence: "high" };
+      }
+    }
+    return updated;
+  });
 }
