@@ -20,7 +20,8 @@
     "agent-rules-pack-java": "0.1.0",
     "agent-rules-pack-js-ts": "0.1.0",
     "agent-rules-pack-php": "0.1.0",
-    "agent-rules-pack-python": "0.1.0"
+    "agent-rules-pack-python": "0.1.0",
+    "agent-rules-pack-types": "0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

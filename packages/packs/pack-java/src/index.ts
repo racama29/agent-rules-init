@@ -5,7 +5,7 @@ import type {
   PromptTemplate,
   RepoSignals,
   RuleSet,
-} from "../../../cli/src/core/types.js";
+} from "agent-rules-pack-types";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pomXml ?? signals.buildGradle;
