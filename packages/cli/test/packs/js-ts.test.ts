@@ -44,6 +44,42 @@ describe("jsTsPack", () => {
     expect(detection?.framework).toEqual({ value: "next", confidence: "high" });
   });
 
+  it("detects Express as a backend framework", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: { express: "^5.2.1" }, devDependencies: {}, scripts: {} },
+      })
+    );
+    expect(detection?.framework).toEqual({ value: "express", confidence: "high" });
+  });
+
+  it("detects NestJS instead of Express when both are present", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: {
+          dependencies: { "@nestjs/core": "^10.0.0", express: "^4.18.0" },
+          devDependencies: {},
+          scripts: {},
+        },
+      })
+    );
+    expect(detection?.framework).toEqual({ value: "nestjs", confidence: "high" });
+  });
+
+  it("detects Fastify", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({ packageJson: { dependencies: { fastify: "^5.0.0" }, devDependencies: {}, scripts: {} } })
+    );
+    expect(detection?.framework).toEqual({ value: "fastify", confidence: "high" });
+  });
+
+  it("detects Koa", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({ packageJson: { dependencies: { koa: "^2.15.0" }, devDependencies: {}, scripts: {} } })
+    );
+    expect(detection?.framework).toEqual({ value: "koa", confidence: "high" });
+  });
+
   it("marks framework as low confidence when no known framework dependency is found", () => {
     const detection = jsTsPack.detect(
       baseSignals({

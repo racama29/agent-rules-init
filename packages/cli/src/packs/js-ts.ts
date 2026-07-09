@@ -9,10 +9,14 @@ import type {
 
 const FRAMEWORKS: Record<string, string> = {
   next: "next",
+  "@nestjs/core": "nestjs",
   react: "react",
   vue: "vue",
   "@angular/core": "angular",
   svelte: "svelte",
+  fastify: "fastify",
+  koa: "koa",
+  express: "express",
 };
 
 const TEST_RUNNERS: Record<string, string> = {
