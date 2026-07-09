@@ -1,0 +1,6 @@
+{
+  "name": "fixture-monorepo-root",
+  "dependencies": { "vue": "^3.4.0" },
+  "devDependencies": { "jest": "^29.7.0" },
+  "scripts": {}
+}
