@@ -2,7 +2,7 @@
 
 La mayoría de asistentes de IA (Claude Code, Codex, Copilot, Cursor) se usan como chat genérico porque configurarlos bien — `CLAUDE.md`, `AGENTS.md`, reglas de arquitectura, prompts de review — es trabajo manual que casi nadie hace.
 
-`agent-rules-init` genera esos archivos **a partir de lo que tu repo ya es**: lee tus manifiestos (`package.json`, `pyproject.toml`, `pom.xml`, `composer.json`...), detecta framework, test runner y gestor de dependencias, y solo pregunta lo que no puede inferir con confianza.
+`agent-rules-init` genera esos archivos **a partir de lo que tu repo ya es**: lee tus manifiestos (`package.json`, `pyproject.toml`/`environment.yml`, `pom.xml`, `composer.json`, `Gemfile`, `go.mod`, `Cargo.toml`, `.csproj`...), detecta framework, test runner y gestor de dependencias, y solo pregunta lo que no puede inferir con confianza.
 
 ## Uso
 
@@ -12,7 +12,7 @@ Desde la raíz de tu repo:
 npx agent-rules-init
 ```
 
-El CLI escanea el repo, detecta el/los stack(s) presentes (JS/TS, Python, Java, PHP) leyendo tus manifiestos, y genera un conjunto de archivos **sin sobrescribir nunca nada existente** — todo se crea con el sufijo `.generated.`:
+El CLI escanea el repo, detecta el/los stack(s) presentes leyendo tus manifiestos, y genera un conjunto de archivos **sin sobrescribir nunca nada existente** — todo se crea con el sufijo `.generated.`:
 
 - `CLAUDE.generated.md`
 - `AGENTS.generated.md`
@@ -20,7 +20,7 @@ El CLI escanea el repo, detecta el/los stack(s) presentes (JS/TS, Python, Java, 
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
-(`<stack>` es `js-ts`, `python`, `java` o `php` — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
+(`<stack>` es `js-ts`, `python`, `java`, `php`, `ruby`, `go`, `rust` o `csharp` — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
 
 Si algún dato no se puede inferir con confianza (p. ej. el framework), el CLI te hará una pregunta puntual antes de generar los archivos.
 
@@ -30,12 +30,16 @@ Si tienes `claude` o `codex` instalados y autenticados, el CLI te ofrece (opcion
 
 ## Stacks soportados
 
-| Stack | Estado |
-|---|---|
-| JavaScript / TypeScript | ✅ estable |
-| Python | ✅ estable |
-| Java | ✅ estable |
-| PHP | ✅ estable |
+| Stack | Frameworks detectados | Estado |
+|---|---|---|
+| JavaScript / TypeScript | React, Next.js, Vue, Angular, Svelte, Express, NestJS, Fastify, Koa | ✅ estable |
+| Python | FastAPI, Django, Flask (pip, Poetry o Conda vía `environment.yml`) | ✅ estable |
+| Java | Spring (Maven o Gradle) | ✅ estable |
+| PHP | Laravel, Symfony, CodeIgniter | ✅ estable |
+| Ruby | Rails, Sinatra | ✅ estable |
+| Go | Gin, Echo, Fiber, Chi | ✅ estable |
+| Rust | Actix Web, Axum, Rocket | ✅ estable |
+| C# / .NET | ASP.NET Core | ✅ estable |
 
 ## Desarrollo local
 
@@ -47,7 +51,7 @@ npm run test --workspaces --if-present
 
 ## Contribuir
 
-Añadir soporte a un stack nuevo es implementar la interfaz `Pack` en `packages/packs/`. Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) y [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Añadir soporte a un stack nuevo es implementar la interfaz `Pack` en un archivo dentro de `packages/cli/src/packs/` — no hace falta crear ni publicar ningún paquete npm nuevo. Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) y [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Licencia
 

@@ -10,7 +10,7 @@ npm run test --workspaces --if-present
 
 ## Añadir un stack nuevo
 
-Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) — un pack nuevo es una carpeta en `packages/packs/` que implementa la interfaz `Pack` de `agent-rules-pack-types`, sin tocar `packages/cli/src/core/`.
+Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) — un pack nuevo es un archivo en `packages/cli/src/packs/` que implementa la interfaz `Pack` de `packages/cli/src/core/types.ts`.
 
 ## Pull requests
 
