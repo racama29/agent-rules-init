@@ -18,10 +18,10 @@ import {
 } from "./core/prompt-engine.js";
 import { detectAvailableAssistants, polishWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
 import type { Pack } from "./core/types.js";
-import { jsTsPack } from "agent-rules-pack-js-ts";
-import { pythonPack } from "agent-rules-pack-python";
-import { javaPack } from "agent-rules-pack-java";
-import { phpPack } from "agent-rules-pack-php";
+import { jsTsPack } from "./packs/js-ts.js";
+import { pythonPack } from "./packs/python.js";
+import { javaPack } from "./packs/java.js";
+import { phpPack } from "./packs/php.js";
 
 const ALL_PACKS: Pack[] = [jsTsPack, pythonPack, javaPack, phpPack];
 

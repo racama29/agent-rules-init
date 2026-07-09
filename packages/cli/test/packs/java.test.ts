@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { javaPack } from "../src/index.js";
-import type { RepoSignals } from "agent-rules-pack-types";
+import { javaPack } from "../../src/packs/java.js";
+import type { RepoSignals } from "../../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };

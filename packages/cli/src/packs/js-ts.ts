@@ -5,7 +5,7 @@ import type {
   PromptTemplate,
   RepoSignals,
   RuleSet,
-} from "agent-rules-pack-types";
+} from "../core/types.js";
 
 const FRAMEWORKS: Record<string, string> = {
   next: "next",

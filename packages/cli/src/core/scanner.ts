@@ -46,12 +46,19 @@ function readTextIfExists(filePath: string): string | undefined {
   }
 }
 
-function findFirst(files: string[], fileName: string): string | undefined {
-  const matches = files.filter((f) => path.basename(f) === fileName);
+function shallowest(matches: string[]): string | undefined {
   if (matches.length === 0) return undefined;
-  return matches.reduce((shallowest, candidate) =>
-    candidate.split(path.sep).length < shallowest.split(path.sep).length ? candidate : shallowest
+  return matches.reduce((shallowestSoFar, candidate) =>
+    candidate.split(path.sep).length < shallowestSoFar.split(path.sep).length ? candidate : shallowestSoFar
   );
+}
+
+function findFirst(files: string[], fileName: string): string | undefined {
+  return shallowest(files.filter((f) => path.basename(f) === fileName));
+}
+
+function findFirstByExtension(files: string[], extension: string): string | undefined {
+  return shallowest(files.filter((f) => f.toLowerCase().endsWith(extension)));
 }
 
 export function scanRepo(rootPath: string): RepoSignals {
@@ -84,8 +91,13 @@ export function scanRepo(rootPath: string): RepoSignals {
 
   const pyprojectPath = findFirst(files, "pyproject.toml");
   const requirementsPath = findFirst(files, "requirements.txt");
+  const environmentYmlPath = findFirst(files, "environment.yml") ?? findFirst(files, "environment.yaml");
   const pomPath = findFirst(files, "pom.xml");
   const buildGradlePath = findFirst(files, "build.gradle") ?? findFirst(files, "build.gradle.kts");
+  const gemfilePath = findFirst(files, "Gemfile");
+  const goModPath = findFirst(files, "go.mod");
+  const cargoTomlPath = findFirst(files, "Cargo.toml");
+  const csprojPath = findFirstByExtension(files, ".csproj");
 
   return {
     rootPath,
@@ -99,8 +111,15 @@ export function scanRepo(rootPath: string): RepoSignals {
     requirementsTxt: requirementsPath
       ? readTextIfExists(path.join(rootPath, requirementsPath))
       : undefined,
+    environmentYml: environmentYmlPath
+      ? readTextIfExists(path.join(rootPath, environmentYmlPath))
+      : undefined,
     pomXml: pomPath ? readTextIfExists(path.join(rootPath, pomPath)) : undefined,
     buildGradle: buildGradlePath ? readTextIfExists(path.join(rootPath, buildGradlePath)) : undefined,
     composerJson,
+    gemfile: gemfilePath ? readTextIfExists(path.join(rootPath, gemfilePath)) : undefined,
+    goMod: goModPath ? readTextIfExists(path.join(rootPath, goModPath)) : undefined,
+    cargoToml: cargoTomlPath ? readTextIfExists(path.join(rootPath, cargoTomlPath)) : undefined,
+    csproj: csprojPath ? readTextIfExists(path.join(rootPath, csprojPath)) : undefined,
   };
 }

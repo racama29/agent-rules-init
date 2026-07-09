@@ -2,8 +2,6 @@
   "name": "agent-rules-init-monorepo",
   "private": true,
   "workspaces": [
-    "packages/pack-types",
-    "packages/packs/*",
     "packages/cli"
   ],
   "scripts": {

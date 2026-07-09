@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { jsTsPack } from "../src/index.js";
-import type { RepoSignals } from "agent-rules-pack-types";
+import { jsTsPack } from "../../src/packs/js-ts.js";
+import type { RepoSignals } from "../../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return {
