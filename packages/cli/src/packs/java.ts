@@ -10,6 +10,9 @@ import type {
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pomXml ?? signals.buildGradle;
   if (!source) return null;
+  // A Gradle build that applies the Kotlin plugin is a Kotlin project, not Java —
+  // defer entirely to the Kotlin pack instead of also reporting a spurious Java match.
+  if (/kotlin\(|org\.jetbrains\.kotlin/i.test(source)) return null;
 
   const framework: DetectionField<string> = /spring/i.test(source)
     ? { value: "spring", confidence: "high" }

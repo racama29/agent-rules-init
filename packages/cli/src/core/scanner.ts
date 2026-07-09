@@ -114,6 +114,10 @@ export function scanRepo(rootPath: string): RepoSignals {
   const goModPath = findFirst(files, "go.mod");
   const cargoTomlPath = findFirst(files, "Cargo.toml");
   const csprojPath = findFirstByExtension(files, ".csproj");
+  const packageSwiftPath = findFirst(files, "Package.swift");
+  const pubspecYamlPath = findFirst(files, "pubspec.yaml");
+  const cmakeListsPath = findFirst(files, "CMakeLists.txt");
+  const makefilePath = findFirst(files, "Makefile") ?? findFirst(files, "makefile");
 
   return {
     rootPath,
@@ -137,5 +141,9 @@ export function scanRepo(rootPath: string): RepoSignals {
     goMod: goModPath ? readTextIfExists(path.join(rootPath, goModPath)) : undefined,
     cargoToml: cargoTomlPath ? readTextIfExists(path.join(rootPath, cargoTomlPath)) : undefined,
     csproj: csprojPath ? readTextIfExists(path.join(rootPath, csprojPath)) : undefined,
+    packageSwift: packageSwiftPath ? readTextIfExists(path.join(rootPath, packageSwiftPath)) : undefined,
+    pubspecYaml: pubspecYamlPath ? readTextIfExists(path.join(rootPath, pubspecYamlPath)) : undefined,
+    cmakeLists: cmakeListsPath ? readTextIfExists(path.join(rootPath, cmakeListsPath)) : undefined,
+    makefile: makefilePath ? readTextIfExists(path.join(rootPath, makefilePath)) : undefined,
   };
 }

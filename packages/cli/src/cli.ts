@@ -26,8 +26,25 @@ import { rubyPack } from "./packs/ruby.js";
 import { goPack } from "./packs/go.js";
 import { rustPack } from "./packs/rust.js";
 import { csharpPack } from "./packs/csharp.js";
+import { kotlinPack } from "./packs/kotlin.js";
+import { swiftPack } from "./packs/swift.js";
+import { dartPack } from "./packs/dart.js";
+import { cppPack } from "./packs/cpp.js";
 
-const ALL_PACKS: Pack[] = [jsTsPack, pythonPack, javaPack, phpPack, rubyPack, goPack, rustPack, csharpPack];
+const ALL_PACKS: Pack[] = [
+  jsTsPack,
+  pythonPack,
+  javaPack,
+  phpPack,
+  rubyPack,
+  goPack,
+  rustPack,
+  csharpPack,
+  kotlinPack,
+  swiftPack,
+  dartPack,
+  cppPack,
+];
 
 export interface RunCliOptions {
   promptFn?: PromptFn;

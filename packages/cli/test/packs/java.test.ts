@@ -29,6 +29,13 @@ describe("javaPack", () => {
     expect(detection?.framework?.confidence).toBe("low");
   });
 
+  it("returns null when build.gradle.kts applies the Kotlin plugin (defers to the Kotlin pack)", () => {
+    const detection = javaPack.detect(
+      baseSignals({ buildGradle: 'plugins {\n    kotlin("jvm") version "1.9.0"\n}' })
+    );
+    expect(detection).toBeNull();
+  });
+
   it("reports testRunner as unknown, not junit, when junit is not referenced", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }));
     expect(detection?.testRunner).toEqual({ value: "unknown", confidence: "low" });

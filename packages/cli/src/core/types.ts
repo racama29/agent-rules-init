@@ -26,6 +26,10 @@ export interface RepoSignals {
   goMod?: string;
   cargoToml?: string;
   csproj?: string;
+  packageSwift?: string;
+  pubspecYaml?: string;
+  cmakeLists?: string;
+  makefile?: string;
 }
 
 export type Confidence = "high" | "low";
