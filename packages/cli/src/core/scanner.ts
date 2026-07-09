@@ -118,6 +118,10 @@ export function scanRepo(rootPath: string): RepoSignals {
   const pubspecYamlPath = findFirst(files, "pubspec.yaml");
   const cmakeListsPath = findFirst(files, "CMakeLists.txt");
   const makefilePath = findFirst(files, "Makefile") ?? findFirst(files, "makefile");
+  const mixExsPath = findFirst(files, "mix.exs");
+  const buildSbtPath = findFirst(files, "build.sbt");
+  const rDescriptionPath = findFirst(files, "DESCRIPTION");
+  const renvLockPath = findFirst(files, "renv.lock");
 
   return {
     rootPath,
@@ -145,5 +149,9 @@ export function scanRepo(rootPath: string): RepoSignals {
     pubspecYaml: pubspecYamlPath ? readTextIfExists(path.join(rootPath, pubspecYamlPath)) : undefined,
     cmakeLists: cmakeListsPath ? readTextIfExists(path.join(rootPath, cmakeListsPath)) : undefined,
     makefile: makefilePath ? readTextIfExists(path.join(rootPath, makefilePath)) : undefined,
+    mixExs: mixExsPath ? readTextIfExists(path.join(rootPath, mixExsPath)) : undefined,
+    buildSbt: buildSbtPath ? readTextIfExists(path.join(rootPath, buildSbtPath)) : undefined,
+    rDescription: rDescriptionPath ? readTextIfExists(path.join(rootPath, rDescriptionPath)) : undefined,
+    renvLock: renvLockPath ? readTextIfExists(path.join(rootPath, renvLockPath)) : undefined,
   };
 }

@@ -30,6 +30,9 @@ import { kotlinPack } from "./packs/kotlin.js";
 import { swiftPack } from "./packs/swift.js";
 import { dartPack } from "./packs/dart.js";
 import { cppPack } from "./packs/cpp.js";
+import { elixirPack } from "./packs/elixir.js";
+import { scalaPack } from "./packs/scala.js";
+import { rPack } from "./packs/r.js";
 
 const ALL_PACKS: Pack[] = [
   jsTsPack,
@@ -44,6 +47,9 @@ const ALL_PACKS: Pack[] = [
   swiftPack,
   dartPack,
   cppPack,
+  elixirPack,
+  scalaPack,
+  rPack,
 ];
 
 export interface RunCliOptions {

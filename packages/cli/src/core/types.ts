@@ -30,6 +30,10 @@ export interface RepoSignals {
   pubspecYaml?: string;
   cmakeLists?: string;
   makefile?: string;
+  mixExs?: string;
+  buildSbt?: string;
+  rDescription?: string;
+  renvLock?: string;
 }
 
 export type Confidence = "high" | "low";
