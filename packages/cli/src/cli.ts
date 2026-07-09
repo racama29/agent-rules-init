@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as clack from "@clack/prompts";
+import { pathToFileURL } from "node:url";
 import { scanRepo } from "./core/scanner.js";
 import { writeGeneratedFiles, type WriteResult } from "./core/writer.js";
 import {
@@ -9,7 +10,13 @@ import {
   renderPromptFiles,
   type RenderEntry,
 } from "./core/templates.js";
-import { collectLowConfidenceQuestions, askQuestions, defaultPromptFn, type PromptFn } from "./core/prompt-engine.js";
+import {
+  collectLowConfidenceQuestions,
+  askQuestions,
+  applyAnswers,
+  defaultPromptFn,
+  type PromptFn,
+} from "./core/prompt-engine.js";
 import { detectAvailableAssistants, polishWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
 import type { Pack } from "./core/types.js";
 import { jsTsPack } from "agent-rules-pack-js-ts";
@@ -30,10 +37,13 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const execFn = options.execFn ?? defaultExecFn;
 
   const signals = scanRepo(rootPath);
-  const detections = ALL_PACKS.map((pack) => pack.detect(signals)).filter((d): d is NonNullable<typeof d> => d !== null);
+  const rawDetections = ALL_PACKS.map((pack) => pack.detect(signals)).filter(
+    (d): d is NonNullable<typeof d> => d !== null
+  );
 
-  const questions = collectLowConfidenceQuestions(detections);
-  await askQuestions(questions, promptFn);
+  const questions = collectLowConfidenceQuestions(rawDetections);
+  const answers = await askQuestions(questions, promptFn);
+  const detections = applyAnswers(rawDetections, answers);
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
@@ -51,7 +61,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     });
     for (const detection of detections) {
       const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
-      for (const file of renderPromptFiles(pack.promptTemplates(detection))) {
+      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection))) {
         files.push(file);
       }
     }
@@ -65,16 +75,37 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   if (!options.skipLlm) {
     const assistants = await detectAvailableAssistants(execFn);
     if (assistants.length > 0) {
+      const chosenAssistant = assistants[0];
       const usePolish = await clack.confirm({
-        message: `Se detectó ${assistants.join(" y ")}. ¿Quieres que pula la redacción final?`,
+        message: `Se detectó ${chosenAssistant}. ¿Quieres que pula la redacción final?`,
       });
       if (usePolish === true) {
         for (const file of files) {
-          file.content = await polishWithAssistant(assistants[0], file.content, execFn);
+          file.content = await polishWithAssistant(chosenAssistant, file.content, execFn);
         }
       }
     }
   }
 
   return writeGeneratedFiles(rootPath, files);
+}
+
+async function main(): Promise<void> {
+  const results = await runCli(process.cwd());
+  const failures = results.filter((r) => r.status === "error");
+  for (const result of results) {
+    if (result.status === "written") {
+      clack.log.success(result.path);
+    } else {
+      clack.log.warn(`${result.path}: ${result.error}`);
+    }
+  }
+  if (failures.length > 0) {
+    process.exitCode = 1;
+  }
+}
+
+const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+  main();
 }
