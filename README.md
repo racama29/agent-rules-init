@@ -20,7 +20,7 @@ El CLI escanea el repo, detecta el/los stack(s) presentes leyendo tus manifiesto
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
-(`<stack>` es uno de los 12 listados abajo — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
+(`<stack>` es uno de los 15 listados abajo — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
 
 Si algún dato no se puede inferir con confianza (p. ej. el framework), el CLI te hará una pregunta puntual antes de generar los archivos.
 
@@ -44,6 +44,9 @@ Si tienes `claude` o `codex` instalados y autenticados, el CLI te ofrece (opcion
 | Swift | Vapor | ✅ estable |
 | Dart / Flutter | Flutter, Shelf | ✅ estable |
 | C / C++ | Qt, Boost, SDL2 | ✅ estable |
+| Elixir | Phoenix | ✅ estable |
+| Scala | Play, Akka | ✅ estable |
+| R | Shiny, Plumber | ✅ estable |
 
 ## Desarrollo local
 
