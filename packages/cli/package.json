@@ -1,0 +1,27 @@
+{
+  "name": "agent-rules-init",
+  "version": "0.1.0",
+  "description": "Generates CLAUDE.md, AGENTS.md, copilot-instructions.md and prompt files from what your repo actually is.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agent-rules-init": "dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "agent-rules-pack-js-ts": "0.1.0",
+    "agent-rules-pack-python": "0.1.0",
+    "agent-rules-pack-java": "0.1.0",
+    "agent-rules-pack-php": "0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
