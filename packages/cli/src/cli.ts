@@ -22,8 +22,12 @@ import { jsTsPack } from "./packs/js-ts.js";
 import { pythonPack } from "./packs/python.js";
 import { javaPack } from "./packs/java.js";
 import { phpPack } from "./packs/php.js";
+import { rubyPack } from "./packs/ruby.js";
+import { goPack } from "./packs/go.js";
+import { rustPack } from "./packs/rust.js";
+import { csharpPack } from "./packs/csharp.js";
 
-const ALL_PACKS: Pack[] = [jsTsPack, pythonPack, javaPack, phpPack];
+const ALL_PACKS: Pack[] = [jsTsPack, pythonPack, javaPack, phpPack, rubyPack, goPack, rustPack, csharpPack];
 
 export interface RunCliOptions {
   promptFn?: PromptFn;
