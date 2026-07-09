@@ -1,5 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
-import { collectLowConfidenceQuestions, askQuestions, applyAnswers } from "../src/core/prompt-engine.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  collectLowConfidenceQuestions,
+  askQuestions,
+  applyAnswers,
+  defaultPromptFn,
+  hasInteractiveTty,
+} from "../src/core/prompt-engine.js";
 import type { DetectionResult } from "../src/core/types.js";
 
 describe("collectLowConfidenceQuestions", () => {
@@ -82,5 +88,31 @@ describe("applyAnswers", () => {
     ];
     const updated = applyAnswers(detections, { "js-ts:framework": "" });
     expect(updated[0].framework).toEqual({ value: "none", confidence: "low" });
+  });
+});
+
+describe("without an interactive TTY (e.g. Git Bash on Windows, CI, some VS Code terminal setups)", () => {
+  let originalStdinTty: boolean | undefined;
+  let originalStdoutTty: boolean | undefined;
+
+  beforeEach(() => {
+    originalStdinTty = process.stdin.isTTY;
+    originalStdoutTty = process.stdout.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", { value: originalStdinTty, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", { value: originalStdoutTty, configurable: true });
+  });
+
+  it("hasInteractiveTty reports false", () => {
+    expect(hasInteractiveTty()).toBe(false);
+  });
+
+  it("defaultPromptFn resolves to an empty string instead of trying to render a prompt", async () => {
+    const answer = await defaultPromptFn("¿Cuál framework?");
+    expect(answer).toBe("");
   });
 });

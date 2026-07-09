@@ -15,6 +15,7 @@ import {
   askQuestions,
   applyAnswers,
   defaultPromptFn,
+  hasInteractiveTty,
   type PromptFn,
 } from "./core/prompt-engine.js";
 import { detectAvailableAssistants, polishWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
@@ -72,7 +73,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     });
   }
 
-  if (!options.skipLlm) {
+  if (!options.skipLlm && hasInteractiveTty()) {
     const assistants = await detectAvailableAssistants(execFn);
     if (assistants.length > 0) {
       const chosenAssistant = assistants[0];
@@ -92,29 +93,42 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
 
 async function main(): Promise<void> {
   clack.intro("agent-rules-init");
-  const results = await runCli(process.cwd());
-  const written = results.filter((r) => r.status === "written");
-  const failures = results.filter((r) => r.status === "error");
 
-  for (const result of results) {
-    if (result.status === "written") {
-      clack.log.success(result.path);
-    } else {
-      clack.log.warn(`${result.path}: ${result.error}`);
-    }
-  }
-
-  if (written.length > 0) {
-    clack.outro(
-      "Revisa los archivos *.generated.* y, cuando estés conforme, quita el sufijo " +
-        '".generated" (ej. "CLAUDE.generated.md" → "CLAUDE.md") para activarlos — ' +
-        "tu asistente de IA solo lee el nombre final, no el generado."
+  if (!hasInteractiveTty()) {
+    console.warn(
+      "No se detectó una terminal interactiva (esto pasa a veces en Git Bash en Windows). " +
+        "Continuando sin preguntas ni oferta de pulido con IA; se usarán los valores detectados."
     );
-  } else {
-    clack.outro("No se generó ningún archivo nuevo.");
   }
 
-  if (failures.length > 0) {
+  try {
+    const results = await runCli(process.cwd());
+    const written = results.filter((r) => r.status === "written");
+    const failures = results.filter((r) => r.status === "error");
+
+    for (const result of results) {
+      if (result.status === "written") {
+        clack.log.success(result.path);
+      } else {
+        clack.log.warn(`${result.path}: ${result.error}`);
+      }
+    }
+
+    if (written.length > 0) {
+      clack.outro(
+        "Revisa los archivos *.generated.* y, cuando estés conforme, quita el sufijo " +
+          '".generated" (ej. "CLAUDE.generated.md" → "CLAUDE.md") para activarlos — ' +
+          "tu asistente de IA solo lee el nombre final, no el generado."
+      );
+    } else {
+      clack.outro("No se generó ningún archivo nuevo.");
+    }
+
+    if (failures.length > 0) {
+      process.exitCode = 1;
+    }
+  } catch (err) {
+    clack.log.error(`Fallo inesperado: ${(err as Error).message}`);
     process.exitCode = 1;
   }
 }

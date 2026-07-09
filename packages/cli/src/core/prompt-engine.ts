@@ -30,7 +30,17 @@ export function collectLowConfidenceQuestions(detections: DetectionResult[]): Qu
 
 export type PromptFn = (message: string) => Promise<string>;
 
+export function hasInteractiveTty(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
 export const defaultPromptFn: PromptFn = async (message) => {
+  if (!hasInteractiveTty()) {
+    console.warn(
+      `No se detectó una terminal interactiva; se omite la pregunta "${message}" y se usa el valor detectado.`
+    );
+    return "";
+  }
   const answer = await clack.text({ message });
   if (clack.isCancel(answer)) {
     clack.cancel("Operación cancelada.");
