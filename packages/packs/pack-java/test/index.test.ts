@@ -29,6 +29,11 @@ describe("javaPack", () => {
     expect(detection?.framework?.confidence).toBe("low");
   });
 
+  it("reports testRunner as unknown, not junit, when junit is not referenced", () => {
+    const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }));
+    expect(detection?.testRunner).toEqual({ value: "unknown", confidence: "low" });
+  });
+
   it("produces review, refactor and testing prompt templates", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
     const templates = javaPack.promptTemplates(detection);

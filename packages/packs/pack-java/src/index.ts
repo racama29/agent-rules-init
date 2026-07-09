@@ -21,7 +21,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
 
   const testRunner: DetectionField<string> = /junit/i.test(source)
     ? { value: "junit", confidence: "high" }
-    : { value: "junit", confidence: "low" };
+    : { value: "unknown", confidence: "low" };
 
   return { packId: "java", language: "Java", framework, packageManager, testRunner };
 }
