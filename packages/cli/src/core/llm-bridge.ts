@@ -16,7 +16,11 @@ const VERSION_ARGS: Record<AssistantId, string[]> = {
 
 export const defaultExecFn: ExecFn = (command, args) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, args, { shell: true });
+    // shell:true is only needed on Windows, to resolve npm-installed .cmd/.ps1 shims.
+    // On POSIX, spawn(command, args) execs the binary directly with argv, so passing
+    // large generated content as an argument (see polishWithAssistant) can never be
+    // reinterpreted by a shell there.
+    const child = spawn(command, args, { shell: process.platform === "win32" });
     let stdout = "";
     child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
     child.on("error", reject);
@@ -50,7 +54,10 @@ export async function polishWithAssistant(
   try {
     const result = await execFn(assistant, ["-p", prompt]);
     return result.stdout.trim() || content;
-  } catch {
+  } catch (err) {
+    console.warn(
+      `No se pudo pulir el contenido con ${assistant}, se mantiene el original: ${(err as Error).message}`
+    );
     return content;
   }
 }
