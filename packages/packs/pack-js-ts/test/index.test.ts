@@ -31,6 +31,19 @@ describe("jsTsPack", () => {
     expect(detection?.testRunner).toEqual({ value: "vitest", confidence: "high" });
   });
 
+  it("detects Next.js instead of plain React when both dependencies are present", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: {
+          dependencies: { next: "^14.0.0", react: "^18.3.0" },
+          devDependencies: {},
+          scripts: {},
+        },
+      })
+    );
+    expect(detection?.framework).toEqual({ value: "next", confidence: "high" });
+  });
+
   it("marks framework as low confidence when no known framework dependency is found", () => {
     const detection = jsTsPack.detect(
       baseSignals({

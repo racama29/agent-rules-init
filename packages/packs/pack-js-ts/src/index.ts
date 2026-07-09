@@ -8,10 +8,10 @@ import type {
 } from "agent-rules-pack-types";
 
 const FRAMEWORKS: Record<string, string> = {
+  next: "next",
   react: "react",
   vue: "vue",
   "@angular/core": "angular",
-  next: "next",
   svelte: "svelte",
 };
 
