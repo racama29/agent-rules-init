@@ -6,17 +6,25 @@ La mayoría de asistentes de IA (Claude Code, Codex, Copilot, Cursor) se usan co
 
 ## Uso
 
+Desde la raíz de tu repo:
+
 ```bash
 npx agent-rules-init
 ```
 
-Esto genera, sin sobrescribir nunca nada existente:
+El CLI escanea el repo, detecta el/los stack(s) presentes (JS/TS, Python, Java, PHP) leyendo tus manifiestos, y genera un conjunto de archivos **sin sobrescribir nunca nada existente** — todo se crea con el sufijo `.generated.`:
 
 - `CLAUDE.generated.md`
 - `AGENTS.generated.md`
 - `.github/copilot-instructions.generated.md`
-- `.claude/commands/{review,refactor,testing}.generated.md`
-- `.github/prompts/{review,refactor,testing}.generated.prompt.md`
+- `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
+- `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
+
+(`<stack>` es `js-ts`, `python`, `java` o `php` — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
+
+Si algún dato no se puede inferir con confianza (p. ej. el framework), el CLI te hará una pregunta puntual antes de generar los archivos.
+
+**Último paso, manual a propósito:** revisa el contenido generado y, cuando estés conforme, quita el sufijo `.generated` del nombre (`CLAUDE.generated.md` → `CLAUDE.md`, etc.) — los asistentes de IA solo leen el nombre final, no el generado. Esto es intencional: así nunca se sobrescribe silenciosamente algo que ya tenías afinado a mano.
 
 Si tienes `claude` o `codex` instalados y autenticados, el CLI te ofrece (opcional, nunca automático) usar tu propia sesión para pulir la redacción final.
 

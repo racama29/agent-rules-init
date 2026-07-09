@@ -91,8 +91,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
 }
 
 async function main(): Promise<void> {
+  clack.intro("agent-rules-init");
   const results = await runCli(process.cwd());
+  const written = results.filter((r) => r.status === "written");
   const failures = results.filter((r) => r.status === "error");
+
   for (const result of results) {
     if (result.status === "written") {
       clack.log.success(result.path);
@@ -100,6 +103,17 @@ async function main(): Promise<void> {
       clack.log.warn(`${result.path}: ${result.error}`);
     }
   }
+
+  if (written.length > 0) {
+    clack.outro(
+      "Revisa los archivos *.generated.* y, cuando estés conforme, quita el sufijo " +
+        '".generated" (ej. "CLAUDE.generated.md" → "CLAUDE.md") para activarlos — ' +
+        "tu asistente de IA solo lee el nombre final, no el generado."
+    );
+  } else {
+    clack.outro("No se generó ningún archivo nuevo.");
+  }
+
   if (failures.length > 0) {
     process.exitCode = 1;
   }
