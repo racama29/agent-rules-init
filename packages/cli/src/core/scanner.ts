@@ -39,11 +39,19 @@ function readJsonIfExists(filePath: string): Record<string, unknown> | undefined
 
 function readTextIfExists(filePath: string): string | undefined {
   if (!fs.existsSync(filePath)) return undefined;
-  return fs.readFileSync(filePath, "utf-8");
+  try {
+    return fs.readFileSync(filePath, "utf-8");
+  } catch {
+    return undefined;
+  }
 }
 
 function findFirst(files: string[], fileName: string): string | undefined {
-  return files.find((f) => path.basename(f) === fileName);
+  const matches = files.filter((f) => path.basename(f) === fileName);
+  if (matches.length === 0) return undefined;
+  return matches.reduce((shallowest, candidate) =>
+    candidate.split(path.sep).length < shallowest.split(path.sep).length ? candidate : shallowest
+  );
 }
 
 export function scanRepo(rootPath: string): RepoSignals {

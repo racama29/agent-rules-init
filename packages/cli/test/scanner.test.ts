@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { scanRepo } from "../src/core/scanner.js";
 
@@ -26,5 +28,31 @@ describe("scanRepo", () => {
     const signals = scanRepo(path.join(fixturesRoot, "monorepo-js-python"));
     expect(signals.packageJson?.dependencies.vue).toBe("^3.4.0");
     expect(signals.requirementsTxt).toContain("fastapi");
+  });
+
+  describe("with a nested package.json that alphabetically precedes the root one", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-"));
+      fs.writeFileSync(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({ name: "root-project", dependencies: {}, devDependencies: {}, scripts: {} })
+      );
+      fs.mkdirSync(path.join(tmpDir, "apps", "nested"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "apps", "nested", "package.json"),
+        JSON.stringify({ name: "nested-project", dependencies: {}, devDependencies: {}, scripts: {} })
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("prefers the root-level package.json over a nested one", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.packageJson?.name).toBe("root-project");
+    });
   });
 });
