@@ -1,13 +1,13 @@
 {
   "name": "agent-rules-init",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Generates CLAUDE.md, AGENTS.md, copilot-instructions.md and prompt files from what your repo actually is.",
   "license": "MIT",
   "type": "module",
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",
   "bin": {
-    "agent-rules-init": "dist/cli.js"
+    "agent-rules-init": "dist/bin.js"
   },
   "files": [
     "dist"

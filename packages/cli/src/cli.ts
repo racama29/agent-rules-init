@@ -1,6 +1,4 @@
-#!/usr/bin/env node
 import * as clack from "@clack/prompts";
-import { pathToFileURL } from "node:url";
 import { scanRepo } from "./core/scanner.js";
 import { writeGeneratedFiles, type WriteResult } from "./core/writer.js";
 import {
@@ -92,7 +90,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   return writeGeneratedFiles(rootPath, files);
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   clack.intro("agent-rules-init");
 
   if (!hasInteractiveTty()) {
@@ -132,9 +130,4 @@ async function main(): Promise<void> {
     clack.log.error(`Fallo inesperado: ${(err as Error).message}`);
     process.exitCode = 1;
   }
-}
-
-const isMainModule = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (isMainModule) {
-  main();
 }
