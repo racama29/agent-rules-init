@@ -2,7 +2,7 @@
 
 La mayoría de asistentes de IA (Claude Code, Codex, Copilot, Cursor) se usan como chat genérico porque configurarlos bien — `CLAUDE.md`, `AGENTS.md`, reglas de arquitectura, prompts de review — es trabajo manual que casi nadie hace.
 
-`agent-rules-init` genera esos archivos **a partir de lo que tu repo ya es**: lee tus manifiestos (`package.json`, `pyproject.toml`/`environment.yml`, `pom.xml`, `composer.json`, `Gemfile`, `go.mod`, `Cargo.toml`, `.csproj`...), detecta framework, test runner y gestor de dependencias, y solo pregunta lo que no puede inferir con confianza.
+`agent-rules-init` genera esos archivos **a partir de lo que tu repo ya es**: lee tus manifiestos (`package.json`, `pyproject.toml`/`environment.yml`, `pom.xml`/`build.gradle(.kts)`, `composer.json`, `Gemfile`, `go.mod`, `Cargo.toml`, `.csproj`, `Package.swift`, `pubspec.yaml`, `CMakeLists.txt`/`Makefile`...), detecta framework, test runner y gestor de dependencias, y solo pregunta lo que no puede inferir con confianza.
 
 ## Uso
 
@@ -20,7 +20,7 @@ El CLI escanea el repo, detecta el/los stack(s) presentes leyendo tus manifiesto
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
-(`<stack>` es `js-ts`, `python`, `java`, `php`, `ruby`, `go`, `rust` o `csharp` — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
+(`<stack>` es uno de los 12 listados abajo — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
 
 Si algún dato no se puede inferir con confianza (p. ej. el framework), el CLI te hará una pregunta puntual antes de generar los archivos.
 
@@ -40,6 +40,10 @@ Si tienes `claude` o `codex` instalados y autenticados, el CLI te ofrece (opcion
 | Go | Gin, Echo, Fiber, Chi | ✅ estable |
 | Rust | Actix Web, Axum, Rocket | ✅ estable |
 | C# / .NET | ASP.NET Core | ✅ estable |
+| Kotlin | Ktor, Android, Spring | ✅ estable |
+| Swift | Vapor | ✅ estable |
+| Dart / Flutter | Flutter, Shelf | ✅ estable |
+| C / C++ | Qt, Boost, SDL2 | ✅ estable |
 
 ## Desarrollo local
 
