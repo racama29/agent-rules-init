@@ -201,6 +201,15 @@ describe("extractCiCommands", () => {
     expect(extractCiCommands(wf("name: empty\non: push\n")).commands).toEqual([]);
   });
 
+  it("skips pure shell control-flow lines from multi-line run blocks", () => {
+    const { commands } = extractCiCommands(
+      wf(
+        "jobs:\n  j:\n    steps:\n      - run: |\n          if [[ $TAG == v1.* ]]; then\n            echo old\n          else\n            echo new\n          fi\n          npm publish\n"
+      )
+    );
+    expect(commands.map((c) => c.command)).toEqual(["echo old", "echo new", "npm publish"]);
+  });
+
   it("caps at 30 commands and reports the omitted count", () => {
     const runs = Array.from({ length: 35 }, (_, i) => `      - run: echo ${i}`).join("\n");
     const { commands, omittedCount } = extractCiCommands(wf(`jobs:\n  j:\n    steps:\n${runs}\n`));

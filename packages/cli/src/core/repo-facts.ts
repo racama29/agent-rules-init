@@ -115,6 +115,14 @@ export function filterCommands(entries: CommandEntry[]): {
 
 const MAX_CI_COMMANDS = 30;
 
+// Líneas de un script multilínea que son control de flujo del shell, no comandos:
+// `if [[ ... ]]; then`, `else`, `fi`, `for x in ...; do`, `done`, `case`/`esac`...
+const SHELL_CONTROL_FLOW = /^(?:if|elif|else|fi|then|do|done|for|while|until|case|esac)\b|^(?:fi|then|else|done|esac)$/;
+
+function isShellControlFlow(line: string): boolean {
+  return SHELL_CONTROL_FLOW.test(line);
+}
+
 export function extractCiCommands(signals: RepoSignals): { commands: CiCommand[]; omittedCount: number } {
   const seen = new Map<string, string>(); // comando -> workflow de origen
   for (const workflow of signals.githubWorkflows ?? []) {
@@ -138,7 +146,7 @@ export function extractCiCommands(signals: RepoSignals): { commands: CiCommand[]
         if (typeof run !== "string") continue;
         for (const rawLine of run.split(/\r?\n/)) {
           const line = rawLine.trim();
-          if (line === "" || line.startsWith("#")) continue;
+          if (line === "" || line.startsWith("#") || isShellControlFlow(line)) continue;
           if (!seen.has(line)) seen.set(line, workflowName);
         }
       }
