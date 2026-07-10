@@ -9,6 +9,8 @@ export interface PackageJsonManifest {
 export interface ComposerJsonManifest {
   require: Record<string, string>;
   requireDev: Record<string, string>;
+  // Valores string u array en composer.json; se tipan como unknown y se aplanan al extraer.
+  scripts?: Record<string, unknown>;
 }
 
 export interface RepoSignals {
@@ -35,6 +37,8 @@ export interface RepoSignals {
   buildSbt?: string;
   rDescription?: string;
   renvLock?: string;
+  toxIni?: string;
+  githubWorkflows?: { path: string; content: string }[];
 }
 
 export type Confidence = "high" | "low";

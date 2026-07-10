@@ -30,6 +30,42 @@ describe("scanRepo", () => {
     expect(signals.requirementsTxt).toContain("fastapi");
   });
 
+  describe("with CI workflows, tox.ini and composer scripts", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-facts-"));
+      fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, ".github", "workflows", "ci.yml"),
+        "jobs:\n  test:\n    steps:\n      - run: npm test\n"
+      );
+      fs.writeFileSync(path.join(tmpDir, "tox.ini"), "[tox]\nenvlist = py311\n");
+      fs.writeFileSync(path.join(tmpDir, "composer.json"), JSON.stringify({ require: {}, scripts: { test: "phpunit" } }));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("captures workflow files with normalized paths and raw content", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.githubWorkflows).toHaveLength(1);
+      expect(signals.githubWorkflows?.[0].path).toBe(".github/workflows/ci.yml");
+      expect(signals.githubWorkflows?.[0].content).toContain("npm test");
+    });
+
+    it("captures tox.ini raw content", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.toxIni).toContain("envlist");
+    });
+
+    it("captures composer.json scripts", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.composerJson?.scripts).toEqual({ test: "phpunit" });
+    });
+  });
+
   describe("with manifests saved as UTF-8 with BOM (common on Windows editors)", () => {
     let tmpDir: string;
 

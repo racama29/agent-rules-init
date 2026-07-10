@@ -136,6 +136,7 @@ export function scanRepo(rootPath: string): RepoSignals {
     ? {
         require: (rawComposerJson.require as Record<string, string>) ?? {},
         requireDev: (rawComposerJson["require-dev"] as Record<string, string>) ?? {},
+        scripts: (rawComposerJson.scripts as Record<string, unknown>) ?? {},
       }
     : undefined;
 
@@ -180,6 +181,14 @@ export function scanRepo(rootPath: string): RepoSignals {
   const buildSbtPath = findFirst(files, "build.sbt");
   const rDescriptionPath = findFirst(files, "DESCRIPTION");
   const renvLockPath = findFirst(files, "renv.lock");
+  const toxIniPath = findFirst(files, "tox.ini");
+  const workflowPaths = files.filter((f) => {
+    const normalized = f.split(path.sep).join("/");
+    return (
+      normalized.startsWith(".github/workflows/") &&
+      (normalized.endsWith(".yml") || normalized.endsWith(".yaml"))
+    );
+  });
 
   return {
     rootPath,
@@ -211,5 +220,12 @@ export function scanRepo(rootPath: string): RepoSignals {
     buildSbt: buildSbtPath ? readTextIfExists(path.join(rootPath, buildSbtPath)) : undefined,
     rDescription: rDescriptionPath ? readTextIfExists(path.join(rootPath, rDescriptionPath)) : undefined,
     renvLock: renvLockPath ? readTextIfExists(path.join(rootPath, renvLockPath)) : undefined,
+    toxIni: toxIniPath ? readTextIfExists(path.join(rootPath, toxIniPath)) : undefined,
+    githubWorkflows: workflowPaths
+      .map((p) => ({
+        path: p.split(path.sep).join("/"),
+        content: readTextIfExists(path.join(rootPath, p)),
+      }))
+      .filter((w): w is { path: string; content: string } => w.content !== undefined),
   };
 }
