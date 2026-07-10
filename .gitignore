@@ -4,3 +4,4 @@ dist/
 !fixtures/**/*.generated.*
 .claude/
 .npmrc
+DEVNOTES.md
