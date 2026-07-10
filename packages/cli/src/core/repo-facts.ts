@@ -1,5 +1,6 @@
 import path from "node:path";
-import type { CommandEntry, CommandSource, DirEntry, RepoSignals } from "./types.js";
+import { parse } from "yaml";
+import type { CiCommand, CommandEntry, CommandSource, DirEntry, RepoSignals } from "./types.js";
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
 
@@ -110,6 +111,44 @@ export function filterCommands(entries: CommandEntry[]): {
     if (omittedCount > 0) omitted.push({ source, count: omittedCount });
   }
   return { kept, omitted };
+}
+
+const MAX_CI_COMMANDS = 30;
+
+export function extractCiCommands(signals: RepoSignals): { commands: CiCommand[]; omittedCount: number } {
+  const seen = new Map<string, string>(); // comando -> workflow de origen
+  for (const workflow of signals.githubWorkflows ?? []) {
+    let doc: unknown;
+    try {
+      doc = parse(workflow.content);
+    } catch {
+      continue; // YAML inválido: omitir antes que inventar
+    }
+    if (!doc || typeof doc !== "object") continue;
+    const jobs = (doc as Record<string, unknown>).jobs;
+    if (!jobs || typeof jobs !== "object") continue;
+    const workflowName = workflow.path.split("/").pop() ?? workflow.path;
+    for (const job of Object.values(jobs as Record<string, unknown>)) {
+      if (!job || typeof job !== "object") continue;
+      const steps = (job as Record<string, unknown>).steps;
+      if (!Array.isArray(steps)) continue;
+      for (const step of steps) {
+        if (!step || typeof step !== "object") continue;
+        const run = (step as Record<string, unknown>).run;
+        if (typeof run !== "string") continue;
+        for (const rawLine of run.split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (line === "" || line.startsWith("#")) continue;
+          if (!seen.has(line)) seen.set(line, workflowName);
+        }
+      }
+    }
+  }
+  const all = [...seen.entries()].map(([command, workflow]) => ({ command, workflow }));
+  return {
+    commands: all.slice(0, MAX_CI_COMMANDS),
+    omittedCount: Math.max(0, all.length - MAX_CI_COMMANDS),
+  };
 }
 
 const DIR_NOTES: Record<string, string> = {

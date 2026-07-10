@@ -7,6 +7,7 @@ import {
   extractToxEnvs,
   filterCommands,
   extractStructure,
+  extractCiCommands,
 } from "../src/core/repo-facts.js";
 import type { CommandEntry, RepoSignals } from "../src/core/types.js";
 
@@ -159,6 +160,51 @@ describe("filterCommands", () => {
     const { kept, omitted } = filterCommands([...mk(10), ...make]);
     expect(kept).toHaveLength(20);
     expect(omitted).toEqual([]);
+  });
+});
+
+describe("extractCiCommands", () => {
+  const wf = (content: string, p = ".github/workflows/ci.yml") =>
+    baseSignals({ githubWorkflows: [{ path: p, content }] });
+
+  it("collects run steps line by line, including block scalars", () => {
+    const { commands } = extractCiCommands(
+      wf(
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci\n      - run: |\n          npm run lint\n          npm test\n"
+      )
+    );
+    expect(commands).toEqual([
+      { command: "npm ci", workflow: "ci.yml" },
+      { command: "npm run lint", workflow: "ci.yml" },
+      { command: "npm test", workflow: "ci.yml" },
+    ]);
+  });
+
+  it("deduplicates across workflows keeping the first origin, and skips comments/empty lines", () => {
+    const signals = baseSignals({
+      githubWorkflows: [
+        {
+          path: ".github/workflows/a.yml",
+          content: "jobs:\n  j:\n    steps:\n      - run: |\n          # comentario\n\n          npm test\n",
+        },
+        { path: ".github/workflows/b.yml", content: "jobs:\n  j:\n    steps:\n      - run: npm test\n" },
+      ],
+    });
+    const { commands } = extractCiCommands(signals);
+    expect(commands).toEqual([{ command: "npm test", workflow: "a.yml" }]);
+  });
+
+  it("ignores unparseable workflows and workflows without jobs, and returns [] without workflows", () => {
+    expect(extractCiCommands(baseSignals({})).commands).toEqual([]);
+    expect(extractCiCommands(wf(":: not yaml ::")).commands).toEqual([]);
+    expect(extractCiCommands(wf("name: empty\non: push\n")).commands).toEqual([]);
+  });
+
+  it("caps at 30 commands and reports the omitted count", () => {
+    const runs = Array.from({ length: 35 }, (_, i) => `      - run: echo ${i}`).join("\n");
+    const { commands, omittedCount } = extractCiCommands(wf(`jobs:\n  j:\n    steps:\n${runs}\n`));
+    expect(commands).toHaveLength(30);
+    expect(omittedCount).toBe(5);
   });
 });
 
