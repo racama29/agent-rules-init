@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import * as clack from "@clack/prompts";
 import { scanRepo } from "./core/scanner.js";
 import { writeGeneratedFiles, type WriteResult } from "./core/writer.js";
@@ -117,7 +118,53 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   return writeGeneratedFiles(rootPath, files);
 }
 
+export type CliAction =
+  | { kind: "run" }
+  | { kind: "help" }
+  | { kind: "version" }
+  | { kind: "unknown"; flag: string };
+
+export function resolveCliAction(argv: string[]): CliAction {
+  const [first] = argv;
+  if (first === "--help" || first === "-h") return { kind: "help" };
+  if (first === "--version" || first === "-v") return { kind: "version" };
+  if (first !== undefined) return { kind: "unknown", flag: first };
+  return { kind: "run" };
+}
+
+export function getVersion(): string {
+  // Works both from src/ (tests) and dist/ (published bin): ../package.json
+  // resolves to packages/cli/package.json in either layout.
+  const pkg = createRequire(import.meta.url)("../package.json") as { version: string };
+  return pkg.version;
+}
+
+const USAGE = `agent-rules-init — genera CLAUDE.md, AGENTS.md, copilot-instructions y prompts de review/refactor/testing a partir del stack detectado en tu repo.
+
+Uso:
+  npx agent-rules-init            escanea el directorio actual y genera los archivos *.generated.*
+  npx agent-rules-init --help     muestra esta ayuda
+  npx agent-rules-init --version  muestra la versión
+
+Los archivos se crean siempre con sufijo .generated y nunca sobrescriben nada existente:
+revisa su contenido y quita el sufijo para activarlos.`;
+
 export async function main(): Promise<void> {
+  const action = resolveCliAction(process.argv.slice(2));
+  if (action.kind === "help") {
+    console.log(USAGE);
+    return;
+  }
+  if (action.kind === "version") {
+    console.log(getVersion());
+    return;
+  }
+  if (action.kind === "unknown") {
+    console.error(`Opción no reconocida: ${action.flag}\n\n${USAGE}`);
+    process.exitCode = 1;
+    return;
+  }
+
   clack.intro("agent-rules-init");
 
   if (!hasInteractiveTty()) {
@@ -135,6 +182,8 @@ export async function main(): Promise<void> {
     for (const result of results) {
       if (result.status === "written") {
         clack.log.success(result.path);
+      } else if (result.status === "skipped") {
+        clack.log.info(`${result.path}: ya existía, se conserva sin cambios.`);
       } else {
         clack.log.warn(`${result.path}: ${result.error}`);
       }

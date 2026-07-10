@@ -117,7 +117,7 @@ function promptTemplates(detection: DetectionResult): PromptTemplate[] {
     {
       id: "testing",
       title: "Testing (JS/TS)",
-      body: `Escribe tests para el código señalado usando el test runner detectado (${detection.testRunner?.value ?? "el del proyecto"}). Cubre el camino feliz y al menos un caso límite.`,
+      body: `Escribe tests para el código señalado usando ${detection.testRunner?.value !== "unknown" ? `el test runner detectado (${detection.testRunner?.value})` : "el test runner del proyecto"}. Cubre el camino feliz y al menos un caso límite.`,
     },
   ];
 }

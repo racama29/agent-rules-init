@@ -46,6 +46,17 @@ describe("pythonPack", () => {
     expect(detection?.framework?.confidence).toBe("low");
   });
 
+  it('does not leak the "unknown" sentinel into rules or templates when no test runner is detected', () => {
+    const detection = pythonPack.detect(baseSignals({ requirementsTxt: "some-random-lib==1.0" }))!;
+    expect(detection.testRunner?.value).toBe("unknown");
+
+    const ruleSet = pythonPack.rules(detection);
+    expect(ruleSet.conventions.join("\n")).not.toContain("unknown");
+
+    const testing = pythonPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    expect(testing.body).not.toContain("unknown");
+  });
+
   it("produces review, refactor and testing prompt templates", () => {
     const detection = pythonPack.detect(baseSignals({ requirementsTxt: "flask" }))!;
     const templates = pythonPack.promptTemplates(detection);

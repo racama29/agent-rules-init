@@ -72,7 +72,7 @@ function rules(detection: DetectionResult): RuleSet {
     summary: `Proyecto Python${framework !== "none" ? ` con ${framework}` : ""}.`,
     conventions: [
       "Sigue PEP 8; usa type hints en funciones públicas.",
-      `Ejecuta los tests con ${detection.testRunner?.value ?? "el test runner del proyecto"} antes de terminar una tarea.`,
+      `Ejecuta los tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} antes de terminar una tarea.`,
       "No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.",
     ],
     architectureNotes: [
@@ -98,7 +98,7 @@ function promptTemplates(detection: DetectionResult): PromptTemplate[] {
     {
       id: "testing",
       title: "Testing (Python)",
-      body: `Escribe tests para el código señalado usando ${detection.testRunner?.value ?? "el test runner del proyecto"}. Cubre el camino feliz y al menos un caso límite.`,
+      body: `Escribe tests para el código señalado usando ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"}. Cubre el camino feliz y al menos un caso límite.`,
     },
   ];
 }

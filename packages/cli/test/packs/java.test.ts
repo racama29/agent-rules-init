@@ -41,6 +41,14 @@ describe("javaPack", () => {
     expect(detection?.testRunner).toEqual({ value: "unknown", confidence: "low" });
   });
 
+  it('does not leak the "unknown" sentinel into the testing template when junit is not referenced', () => {
+    const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
+    expect(detection.testRunner?.value).toBe("unknown");
+
+    const testing = javaPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    expect(testing.body).not.toContain("unknown");
+  });
+
   it("produces review, refactor and testing prompt templates", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
     const templates = javaPack.promptTemplates(detection);

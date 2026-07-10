@@ -8,7 +8,7 @@ export interface GeneratedFile {
 
 export interface WriteResult {
   path: string;
-  status: "written" | "error";
+  status: "written" | "skipped" | "error";
   error?: string;
 }
 
@@ -16,8 +16,10 @@ export function writeGeneratedFiles(rootPath: string, files: GeneratedFile[]): W
   return files.map(({ path: relativePath, content }) => {
     const absolutePath = path.join(rootPath, relativePath);
     try {
+      // An already-existing file is the expected outcome on a re-run (the tool's
+      // no-overwrite guarantee), not a failure — report it as skipped, exit 0.
       if (fs.existsSync(absolutePath)) {
-        return { path: relativePath, status: "error", error: "file already exists" };
+        return { path: relativePath, status: "skipped" };
       }
       fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
       fs.writeFileSync(absolutePath, content);

@@ -17,6 +17,18 @@ describe("jsTsPack", () => {
     expect(jsTsPack.detect(baseSignals({}))).toBeNull();
   });
 
+  it('does not leak the "unknown" sentinel into the testing template when no test runner is detected', () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs" },
+      })
+    )!;
+    expect(detection.testRunner?.value).toBe("unknown");
+
+    const testing = jsTsPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    expect(testing.body).not.toContain("unknown");
+  });
+
   it("detects React + Vitest with high confidence", () => {
     const detection = jsTsPack.detect(
       baseSignals({

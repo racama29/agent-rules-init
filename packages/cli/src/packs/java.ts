@@ -65,7 +65,7 @@ function promptTemplates(detection: DetectionResult): PromptTemplate[] {
     {
       id: "testing",
       title: "Testing (Java)",
-      body: `Escribe tests con ${detection.testRunner?.value ?? "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
+      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
     },
   ];
 }

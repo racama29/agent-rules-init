@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { runCli } from "../src/cli.js";
+import { runCli, resolveCliAction, getVersion } from "../src/cli.js";
 
 let tmpDir: string;
 
@@ -19,6 +19,32 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("resolveCliAction", () => {
+  it("runs the generator when no flags are passed", () => {
+    expect(resolveCliAction([])).toEqual({ kind: "run" });
+  });
+
+  it("resolves --help and -h to the help action", () => {
+    expect(resolveCliAction(["--help"])).toEqual({ kind: "help" });
+    expect(resolveCliAction(["-h"])).toEqual({ kind: "help" });
+  });
+
+  it("resolves --version and -v to the version action", () => {
+    expect(resolveCliAction(["--version"])).toEqual({ kind: "version" });
+    expect(resolveCliAction(["-v"])).toEqual({ kind: "version" });
+  });
+
+  it("reports an unknown flag instead of silently running the scan", () => {
+    expect(resolveCliAction(["--wat"])).toEqual({ kind: "unknown", flag: "--wat" });
+  });
+});
+
+describe("getVersion", () => {
+  it("returns the version declared in package.json", () => {
+    expect(getVersion()).toMatch(/^\d+\.\d+\.\d+/);
+  });
 });
 
 describe("runCli", () => {
@@ -59,6 +85,16 @@ describe("runCli", () => {
     const promptFn = vi.fn().mockResolvedValue("");
     const results = await runCli(tmpDir, { promptFn, skipLlm: true });
     expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("reports every file as skipped (never error) when re-run on the same repo", async () => {
+    const promptFn = vi.fn().mockResolvedValue("");
+    await runCli(tmpDir, { promptFn, skipLlm: true });
+    const secondRun = await runCli(tmpDir, { promptFn, skipLlm: true });
+
+    expect(secondRun.length).toBeGreaterThan(0);
+    expect(secondRun.every((r) => r.status === "skipped")).toBe(true);
+    expect(secondRun.filter((r) => r.status === "error")).toEqual([]);
   });
 
   it("does not drop prompt files when two packs are detected in the same repo", async () => {
