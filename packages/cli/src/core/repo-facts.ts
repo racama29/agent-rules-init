@@ -1,6 +1,6 @@
 import path from "node:path";
 import { parse } from "yaml";
-import type { CiCommand, CommandEntry, CommandSource, DirEntry, RepoSignals } from "./types.js";
+import type { CiCommand, CommandEntry, CommandSource, DirEntry, RepoFacts, RepoSignals } from "./types.js";
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
 
@@ -187,4 +187,23 @@ export function extractStructure(signals: RepoSignals): DirEntry[] {
       const note = DIR_NOTES[dir.toLowerCase()];
       return note ? { dir: `${dir}/`, note } : { dir: `${dir}/` };
     });
+}
+
+export function buildRepoFacts(signals: RepoSignals): RepoFacts {
+  const allCommands = [
+    ...extractNpmCommands(signals),
+    ...extractComposerCommands(signals),
+    ...extractMakeTargets(signals),
+    ...extractMixAliases(signals),
+    ...extractToxEnvs(signals),
+  ];
+  const { kept, omitted } = filterCommands(allCommands);
+  const { commands: ciCommands, omittedCount: omittedCiCount } = extractCiCommands(signals);
+  return {
+    commands: kept,
+    omittedCommands: omitted,
+    structure: extractStructure(signals),
+    ciCommands,
+    omittedCiCount,
+  };
 }

@@ -8,6 +8,7 @@ import {
   filterCommands,
   extractStructure,
   extractCiCommands,
+  buildRepoFacts,
 } from "../src/core/repo-facts.js";
 import type { CommandEntry, RepoSignals } from "../src/core/types.js";
 
@@ -223,5 +224,36 @@ describe("extractStructure", () => {
     expect(extractStructure(baseSignals({ files: ["README.md"] }))).toEqual([]);
     const files = Array.from({ length: 30 }, (_, i) => `dir${String(i).padStart(2, "0")}/f.txt`);
     expect(extractStructure(baseSignals({ files }))).toHaveLength(20);
+  });
+});
+
+describe("buildRepoFacts", () => {
+  it("assembles commands from every source plus structure and CI", () => {
+    const facts = buildRepoFacts(
+      baseSignals({
+        files: ["src/index.ts", "package.json"],
+        packageJson: {
+          dependencies: {},
+          devDependencies: {},
+          scripts: { test: "vitest run" },
+          moduleType: "module",
+        },
+        makefile: "docs:\n\tsphinx-build\n",
+        githubWorkflows: [
+          { path: ".github/workflows/ci.yml", content: "jobs:\n  j:\n    steps:\n      - run: npm ci\n" },
+        ],
+      })
+    );
+    expect(facts.commands).toContainEqual({ source: "npm", invocation: "npm test", detail: "vitest run" });
+    expect(facts.commands).toContainEqual({ source: "make", invocation: "make docs" });
+    expect(facts.structure).toEqual([{ dir: "src/", note: "código fuente" }]);
+    expect(facts.ciCommands).toEqual([{ command: "npm ci", workflow: "ci.yml" }]);
+    expect(facts.omittedCommands).toEqual([]);
+    expect(facts.omittedCiCount).toBe(0);
+  });
+
+  it("returns fully empty facts for an empty repo", () => {
+    const facts = buildRepoFacts(baseSignals({}));
+    expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0 });
   });
 });
