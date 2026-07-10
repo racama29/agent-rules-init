@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { extractNpmCommands, extractComposerCommands, extractMakeTargets } from "../src/core/repo-facts.js";
+import {
+  extractNpmCommands,
+  extractComposerCommands,
+  extractMakeTargets,
+  extractMixAliases,
+  extractToxEnvs,
+} from "../src/core/repo-facts.js";
 import type { RepoSignals } from "../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
@@ -87,5 +93,43 @@ describe("extractMakeTargets", () => {
     expect(extractMakeTargets(baseSignals({}))).toEqual([]);
     const entries = extractMakeTargets(baseSignals({ makefile: "all: a\nall: b\n" }));
     expect(entries).toEqual([{ source: "make", invocation: "make all" }]);
+  });
+});
+
+describe("extractMixAliases", () => {
+  it("extracts alias names from a Phoenix-style aliases function", () => {
+    const mixExs = `
+  defp aliases do
+    [
+      setup: ["deps.get", "ecto.setup"],
+      "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
+      test: ["ecto.create --quiet", "test"]
+    ]
+  end
+`;
+    const entries = extractMixAliases(baseSignals({ mixExs }));
+    expect(entries).toContainEqual({ source: "mix", invocation: "mix setup" });
+    expect(entries).toContainEqual({ source: "mix", invocation: "mix ecto.setup" });
+    expect(entries).toContainEqual({ source: "mix", invocation: "mix test" });
+  });
+
+  it("returns [] when there is no aliases function or no mix.exs", () => {
+    expect(extractMixAliases(baseSignals({}))).toEqual([]);
+    expect(extractMixAliases(baseSignals({ mixExs: "defp deps do\n  []\nend\n" }))).toEqual([]);
+  });
+});
+
+describe("extractToxEnvs", () => {
+  it("extracts envs from envlist as tox -e invocations", () => {
+    const toxIni = "[tox]\nenvlist = py311, lint\n\n[testenv]\ncommands = pytest\n";
+    const entries = extractToxEnvs(baseSignals({ toxIni }));
+    expect(entries).toContainEqual({ source: "tox", invocation: "tox -e py311" });
+    expect(entries).toContainEqual({ source: "tox", invocation: "tox -e lint" });
+  });
+
+  it("skips generator envs ({}) instead of guessing, and returns [] without tox.ini", () => {
+    expect(extractToxEnvs(baseSignals({}))).toEqual([]);
+    const entries = extractToxEnvs(baseSignals({ toxIni: "[tox]\nenvlist = py3{10,11}, docs\n" }));
+    expect(entries).toEqual([{ source: "tox", invocation: "tox -e docs" }]);
   });
 });

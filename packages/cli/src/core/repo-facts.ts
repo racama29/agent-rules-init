@@ -32,6 +32,38 @@ export function extractMakeTargets(signals: RepoSignals): CommandEntry[] {
   return [...targets].map((target) => ({ source: "make" as const, invocation: `make ${target}` }));
 }
 
+export function extractMixAliases(signals: RepoSignals): CommandEntry[] {
+  const mixExs = signals.mixExs;
+  if (!mixExs) return [];
+  // Cuerpo de la función aliases (defp aliases do ... end). Si no existe con esa
+  // forma, no se emite nada — omitir antes que inventar.
+  const fnMatch = mixExs.match(/defp?\s+aliases\s*(?:\(\))?\s*do([\s\S]*?)\n\s*end/);
+  if (!fnMatch) return [];
+  const body = fnMatch[1];
+  const names = new Set<string>();
+  // Claves del keyword list cuyo valor empieza por lista o string: `setup: [...]`,
+  // `"ecto.setup": [...]`. Un alias con valor función (&fun/1) se omite.
+  for (const match of body.matchAll(/(?:"([^"]+)"|([a-z_][a-zA-Z0-9_.]*)):\s*(?=[["'])/g)) {
+    names.add(match[1] ?? match[2]);
+  }
+  return [...names].map((alias) => ({ source: "mix" as const, invocation: `mix ${alias}` }));
+}
+
+export function extractToxEnvs(signals: RepoSignals): CommandEntry[] {
+  const toxIni = signals.toxIni;
+  if (!toxIni) return [];
+  const match = toxIni.match(/^[ \t]*env_?list\s*=\s*(.+(?:\n[ \t]+\S.*)*)/m);
+  if (!match) return [];
+  const envs = match[1]
+    .split(/[,\s]+/)
+    .map((env) => env.trim())
+    // Los envs con factores generadores (py3{10,11}) se omiten en vez de expandirlos.
+    // El split por comas los parte en trozos ("py3{10", "11}"), así que basta con
+    // descartar cualquier trozo que contenga una llave.
+    .filter((env) => env !== "" && !env.startsWith("#") && !/[{}]/.test(env));
+  return [...new Set(envs)].map((env) => ({ source: "tox" as const, invocation: `tox -e ${env}` }));
+}
+
 export function extractComposerCommands(signals: RepoSignals): CommandEntry[] {
   const scripts = signals.composerJson?.scripts ?? {};
   const entries: CommandEntry[] = [];
