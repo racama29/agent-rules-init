@@ -176,7 +176,12 @@ export function scanRepo(rootPath: string): RepoSignals {
   // packages/*. Aggregate all of them so the actual framework/test runner is found.
   const pubspecYamlPaths = findAllByNames(files, ["pubspec.yaml"]);
   const cmakeListsPath = findFirst(files, "CMakeLists.txt");
-  const makefilePath = findFirst(files, "Makefile") ?? findFirst(files, "makefile");
+  // Un Makefile que solo existe bajo docs/, tools/, etc. es tooling auxiliar (p. ej. el
+  // Makefile de Sphinx en docs/ de Flask): sus targets no se pueden ejecutar desde la
+  // raíz y no describen el proyecto. Mismo criterio que los manifiestos Python.
+  const makefilePath =
+    findFirstPreferringRealProjectDirs(files, "Makefile") ??
+    findFirstPreferringRealProjectDirs(files, "makefile");
   const mixExsPath = findFirst(files, "mix.exs");
   const buildSbtPath = findFirst(files, "build.sbt");
   const rDescriptionPath = findFirst(files, "DESCRIPTION");

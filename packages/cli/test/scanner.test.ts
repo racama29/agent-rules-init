@@ -66,6 +66,33 @@ describe("scanRepo", () => {
     });
   });
 
+  describe("with a Makefile that only exists under a docs/tooling directory", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-makefile-"));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("ignores a docs-only Makefile (e.g. Sphinx's docs/Makefile in Flask)", () => {
+      fs.mkdirSync(path.join(tmpDir, "docs"));
+      fs.writeFileSync(path.join(tmpDir, "docs", "Makefile"), "help:\n\t@sphinx-build -M help\n");
+      const signals = scanRepo(tmpDir);
+      expect(signals.makefile).toBeUndefined();
+    });
+
+    it("still prefers a root Makefile when both exist", () => {
+      fs.mkdirSync(path.join(tmpDir, "docs"));
+      fs.writeFileSync(path.join(tmpDir, "docs", "Makefile"), "help:\n\t@sphinx-build -M help\n");
+      fs.writeFileSync(path.join(tmpDir, "Makefile"), "build:\n\tgcc main.c\n");
+      const signals = scanRepo(tmpDir);
+      expect(signals.makefile).toContain("gcc main.c");
+    });
+  });
+
   describe("with manifests saved as UTF-8 with BOM (common on Windows editors)", () => {
     let tmpDir: string;
 
