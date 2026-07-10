@@ -87,6 +87,45 @@ describe("runCli", () => {
     expect(results.length).toBeGreaterThan(0);
   });
 
+  it("includes repo facts sections (commands, structure, CI) in the generated files", async () => {
+    fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, ".github", "workflows", "ci.yml"),
+      "jobs:\n  test:\n    steps:\n      - run: npm ci\n"
+    );
+    fs.mkdirSync(path.join(tmpDir, "src"));
+    fs.writeFileSync(path.join(tmpDir, "src", "index.ts"), "export {};\n");
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({
+        dependencies: { react: "^18.3.0" },
+        devDependencies: { vitest: "^2.1.0" },
+        scripts: { test: "vitest run" },
+      })
+    );
+
+    const promptFn = vi.fn().mockResolvedValue("");
+    await runCli(tmpDir, { promptFn, skipLlm: true });
+
+    const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
+    expect(claudeMd).toContain("## Comandos del repo");
+    expect(claudeMd).toContain("- `npm test` → `vitest run` (package.json)");
+    expect(claudeMd).toContain("- `src/` — código fuente");
+    expect(claudeMd).toContain("- `npm ci` (ci.yml)");
+    const agentsMd = fs.readFileSync(path.join(tmpDir, "AGENTS.generated.md"), "utf-8");
+    expect(agentsMd).toContain("## Comandos del repo");
+  });
+
+  it("includes repo facts in the fallback file when no stack is detected", async () => {
+    fs.rmSync(path.join(tmpDir, "package.json"));
+    fs.writeFileSync(path.join(tmpDir, "Makefile"), "deploy:\n\trsync -a site/ server:/var/www\n");
+    const promptFn = vi.fn().mockResolvedValue("");
+    await runCli(tmpDir, { promptFn, skipLlm: true });
+    const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
+    expect(claudeMd).toContain("No se detectó ningún stack conocido");
+    expect(claudeMd).toContain("- `make deploy` (Makefile)");
+  });
+
   it("reports every file as skipped (never error) when re-run on the same repo", async () => {
     const promptFn = vi.fn().mockResolvedValue("");
     await runCli(tmpDir, { promptFn, skipLlm: true });

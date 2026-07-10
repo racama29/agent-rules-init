@@ -7,8 +7,10 @@ import {
   renderAgentsMd,
   renderCopilotInstructions,
   renderPromptFiles,
+  renderRepoFacts,
   type RenderEntry,
 } from "./core/templates.js";
+import { buildRepoFacts } from "./core/repo-facts.js";
 import {
   collectLowConfidenceQuestions,
   askQuestions,
@@ -71,6 +73,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const questions = collectLowConfidenceQuestions(rawDetections);
   const answers = await askQuestions(questions, promptFn);
   const detections = applyAnswers(rawDetections, answers);
+  const facts = buildRepoFacts(signals);
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
@@ -80,11 +83,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const files: { path: string; content: string }[] = [];
 
   if (entries.length > 0) {
-    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries) });
-    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries) });
+    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries, facts) });
+    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries, facts) });
     files.push({
       path: ".github/copilot-instructions.generated.md",
-      content: renderCopilotInstructions(entries),
+      content: renderCopilotInstructions(entries, facts),
     });
     for (const detection of detections) {
       const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
@@ -93,9 +96,12 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
       }
     }
   } else {
+    const factsBlock = renderRepoFacts(facts);
     files.push({
       path: "CLAUDE.generated.md",
-      content: "# CLAUDE.md\n\nNo se detectó ningún stack conocido. Completa este archivo manualmente.\n",
+      content:
+        "# CLAUDE.md\n\nNo se detectó ningún stack conocido. Completa este archivo manualmente.\n" +
+        (factsBlock ? `\n${factsBlock}\n` : ""),
     });
   }
 
