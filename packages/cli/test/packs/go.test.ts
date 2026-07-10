@@ -23,6 +23,12 @@ describe("goPack", () => {
     expect(detection?.framework).toEqual({ value: "gin", confidence: "high" });
   });
 
+  it("does not mistake the project's own module path for a framework dependency (e.g. gofiber/fiber's own go.mod)", () => {
+    const fiberOwnGoMod = `module github.com/gofiber/fiber/v3\n\ngo 1.25.0\n\nrequire (\n\tgithub.com/google/uuid v1.6.0\n\tgithub.com/stretchr/testify v1.11.1\n)\n`;
+    const detection = goPack.detect(baseSignals({ goMod: fiberOwnGoMod }));
+    expect(detection?.framework).toEqual({ value: "none", confidence: "low" });
+  });
+
   it("marks framework low confidence when no known framework is found", () => {
     const detection = goPack.detect(baseSignals({ goMod: "module example.com/app\n\ngo 1.21\n" }));
     expect(detection?.framework).toEqual({ value: "none", confidence: "low" });

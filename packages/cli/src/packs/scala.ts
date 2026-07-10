@@ -4,11 +4,13 @@ const FRAMEWORKS: [string, string][] = [
   ["playframework", "play"],
   ["akka-http", "akka"],
   ["akka.actor", "akka"],
+  ["scalatra", "scalatra"],
 ];
 
 const TEST_RUNNERS: [string, string][] = [
   ["scalatest", "scalatest"],
   ["munit", "munit"],
+  ["specs2", "specs2"],
 ];
 
 function detect(signals: RepoSignals): DetectionResult | null {

@@ -32,6 +32,12 @@ describe("kotlinPack", () => {
     expect(detection?.testRunner).toEqual({ value: "kotest", confidence: "high" });
   });
 
+  it("detects the Kotlin plugin declared via a Gradle version catalog alias, not just literal plugin ids", () => {
+    const versionCatalogGradle = `plugins {\n    alias(libs.plugins.kotlin.android) apply false\n}\n`;
+    const detection = kotlinPack.detect(baseSignals({ buildGradle: versionCatalogGradle }));
+    expect(detection).not.toBeNull();
+  });
+
   it("marks framework low confidence when no known framework is found", () => {
     const detection = kotlinPack.detect(baseSignals({ buildGradle: 'plugins {\n    kotlin("jvm")\n}' }));
     expect(detection?.framework).toEqual({ value: "none", confidence: "low" });

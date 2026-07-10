@@ -5,7 +5,11 @@ function detect(signals: RepoSignals): DetectionResult | null {
   if (!source) return null;
   const lower = source.toLowerCase();
 
-  const framework: DetectionResult["framework"] = lower.includes(":phoenix")
+  // A plain `.includes(":phoenix")` also matches sibling hex packages like `:phoenix_pubsub`
+  // or `:phoenix_html` (substring prefix), and Phoenix's own mix.exs (`app: :phoenix`) —
+  // neither means the project actually depends on the `phoenix` package. Match the
+  // `{:phoenix, ...}` dependency-tuple syntax instead, which only the real dependency uses.
+  const framework: DetectionResult["framework"] = /\{\s*:phoenix\s*,/.test(lower)
     ? { value: "phoenix", confidence: "high" }
     : { value: "none", confidence: "low" };
 

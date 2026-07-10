@@ -3,7 +3,13 @@ import { swiftPack } from "../../src/packs/swift.js";
 import type { RepoSignals } from "../../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
-  return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };
+  return {
+    rootPath: "/fake",
+    files: ["Sources/App/main.swift"],
+    hasFile: () => false,
+    hasDir: () => false,
+    ...overrides,
+  };
 }
 
 const PACKAGE_SWIFT_VAPOR = `// swift-tools-version:5.9
@@ -38,6 +44,13 @@ describe("swiftPack", () => {
     const detection = swiftPack.detect(baseSignals({ packageSwift: 'let package = Package(name: "app")' }));
     expect(detection?.testRunner).toEqual({ value: "swift test", confidence: "high" });
     expect(detection?.packageManager).toEqual({ value: "swift package manager", confidence: "high" });
+  });
+
+  it("returns null when Package.swift exists but there is no actual Swift source (e.g. a C++ library exposing itself via SPM, like nlohmann/json)", () => {
+    const detection = swiftPack.detect(
+      baseSignals({ files: ["Package.swift", "single_include/nlohmann/json.hpp"], packageSwift: PACKAGE_SWIFT_VAPOR })
+    );
+    expect(detection).toBeNull();
   });
 
   it("produces review, refactor and testing prompt templates", () => {

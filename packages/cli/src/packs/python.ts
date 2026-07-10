@@ -26,12 +26,35 @@ function findIn(haystack: string, table: [string, string][]): DetectionField<str
   return undefined;
 }
 
+// Searching the whole pyproject.toml text (project name, URLs, script entry points, etc.)
+// produces false positives — e.g. Flask's own pyproject.toml has `name = "flask"`, which
+// isn't a dependency at all. Scope the search to the actual dependency declarations.
+function extractPyprojectDependencySections(pyproject: string): string {
+  const sections: string[] = [];
+
+  const mainDeps = pyproject.match(/(?:^|\n)dependencies\s*=\s*\[([\s\S]*?)\]/);
+  if (mainDeps) sections.push(mainDeps[1]);
+
+  const optionalDeps = pyproject.match(/\[project\.optional-dependencies\]([\s\S]*?)(?:\n\[|$)/);
+  if (optionalDeps) sections.push(optionalDeps[1]);
+
+  const dependencyGroups = pyproject.match(/\[dependency-groups\]([\s\S]*?)(?:\n\[|$)/);
+  if (dependencyGroups) sections.push(dependencyGroups[1]);
+
+  const poetryDepsBlocks = pyproject.match(/\[tool\.poetry(?:\.group\.\w+)?\.dependencies\]([\s\S]*?)(?:\n\[|$)/g);
+  if (poetryDepsBlocks) sections.push(...poetryDepsBlocks);
+
+  return sections.length > 0 ? sections.join("\n") : pyproject;
+}
+
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pyprojectToml ?? signals.requirementsTxt ?? signals.environmentYml;
   if (!source) return null;
 
-  const framework = findIn(source, FRAMEWORKS) ?? { value: "none", confidence: "low" as const };
-  const testRunner = findIn(source, TEST_RUNNERS) ?? { value: "unknown", confidence: "low" as const };
+  const searchText = signals.pyprojectToml ? extractPyprojectDependencySections(signals.pyprojectToml) : source;
+
+  const framework = findIn(searchText, FRAMEWORKS) ?? { value: "none", confidence: "low" as const };
+  const testRunner = findIn(searchText, TEST_RUNNERS) ?? { value: "unknown", confidence: "low" as const };
   const packageManager: DetectionField<string> = signals.environmentYml
     ? { value: "conda", confidence: "high" }
     : signals.hasFile("poetry.lock")

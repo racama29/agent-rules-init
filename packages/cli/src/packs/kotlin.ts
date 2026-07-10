@@ -3,7 +3,10 @@ import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.buildGradle;
   if (!source) return null;
-  if (!/kotlin\(|org\.jetbrains\.kotlin/i.test(source)) return null;
+  // Modern Gradle projects often declare the Kotlin plugin via a version catalog alias
+  // (`alias(libs.plugins.kotlin.android)`) rather than the literal `kotlin("jvm")` or
+  // `org.jetbrains.kotlin` plugin id, so a plain word-boundary check is more robust.
+  if (!/\bkotlin\b/i.test(source)) return null;
 
   const framework: DetectionResult["framework"] = /ktor/i.test(source)
     ? { value: "ktor", confidence: "high" }

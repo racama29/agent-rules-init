@@ -30,6 +30,16 @@ describe("cppPack", () => {
     expect(detection?.packageManager).toEqual({ value: "make", confidence: "high" });
   });
 
+  it("returns null for a generic task-runner Makefile with no C/C++ signal (e.g. a Sphinx docs Makefile)", () => {
+    const sphinxMakefile = `SPHINXBUILD   ?= sphinx-build\nSOURCEDIR     = .\nBUILDDIR      = _build\n\nhelp:\n\t@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)"\n`;
+    expect(cppPack.detect(baseSignals({ makefile: sphinxMakefile }))).toBeNull();
+  });
+
+  it("returns null for a Go project's Makefile that references a .cc-TLD module path (e.g. mvdan.cc/gofumpt)", () => {
+    const goMakefile = `format:\n\tGOTOOLCHAIN=$(GOVERSION) go run mvdan.cc/gofumpt@latest -w -l .\n`;
+    expect(cppPack.detect(baseSignals({ makefile: goMakefile }))).toBeNull();
+  });
+
   it("marks framework low confidence when no known library is found", () => {
     const detection = cppPack.detect(
       baseSignals({ cmakeLists: "cmake_minimum_required(VERSION 3.20)\nproject(app)\n" })

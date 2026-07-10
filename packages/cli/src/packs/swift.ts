@@ -3,6 +3,13 @@ import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.packageSwift;
   if (!source) return null;
+  // A Package.swift alone doesn't guarantee a Swift project: some C/C++ libraries (e.g.
+  // nlohmann/json) ship one purely so Swift Package Manager users can link the library,
+  // with zero actual Swift source. Require at least one other .swift file to be present.
+  const hasSwiftSource = signals.files.some(
+    (f) => f.toLowerCase().endsWith(".swift") && !f.endsWith("Package.swift")
+  );
+  if (!hasSwiftSource) return null;
   const lower = source.toLowerCase();
 
   const framework: DetectionResult["framework"] = lower.includes("vapor")

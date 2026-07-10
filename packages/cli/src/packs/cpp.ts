@@ -12,8 +12,26 @@ const TEST_RUNNERS: [string, string][] = [
   ["doctest", "doctest"],
 ];
 
+const CPP_COMPILER_TOKENS = ["$(cc)", "$(cxx)", "gcc", "g++", "clang"];
+
+// Source-file extensions need a stricter boundary check than a plain substring:
+// Go module paths hosted on the ".cc" ccTLD (e.g. "mvdan.cc/gofumpt") also contain
+// ".cc", but it's followed by "/", never by whitespace/quote/paren/end-of-line the
+// way a real compiled source file reference in a Makefile would be.
+const CPP_SOURCE_EXTENSION = /\.(cpp|cxx|cc)(?=[\s:"')]|$)/im;
+
+function looksLikeCppMakefile(makefile: string): boolean {
+  const lower = makefile.toLowerCase();
+  return CPP_COMPILER_TOKENS.some((needle) => lower.includes(needle)) || CPP_SOURCE_EXTENSION.test(makefile) || /\.o:/.test(makefile);
+}
+
 function detect(signals: RepoSignals): DetectionResult | null {
-  const source = signals.cmakeLists ?? signals.makefile;
+  // A bare Makefile isn't C/C++-specific — plenty of Python/JS/etc. projects ship
+  // one as a generic task runner (or a Sphinx docs Makefile, like Flask's docs/Makefile).
+  // Only trust it once it actually references a C/C++ compiler or source file.
+  const makefileSource =
+    signals.makefile && looksLikeCppMakefile(signals.makefile) ? signals.makefile : undefined;
+  const source = signals.cmakeLists ?? makefileSource;
   if (!source) return null;
   const lower = source.toLowerCase();
 

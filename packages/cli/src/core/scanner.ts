@@ -57,8 +57,47 @@ function findFirst(files: string[], fileName: string): string | undefined {
   return shallowest(files.filter((f) => path.basename(f) === fileName));
 }
 
-function findFirstByExtension(files: string[], extension: string): string | undefined {
-  return shallowest(files.filter((f) => f.toLowerCase().endsWith(extension)));
+// Directories that routinely carry their own throwaway Python tooling manifest (a
+// mkdocs/sphinx docs build, a one-off script, a benchmark harness) in projects whose
+// primary language is something else entirely (e.g. nlohmann/json, a C++ library, ships
+// docs/mkdocs/requirements.txt). Prefer a candidate outside these dirs when one exists.
+const NON_PROJECT_DIRS = new Set([
+  "docs",
+  "doc",
+  "tools",
+  "tool",
+  "scripts",
+  "script",
+  "examples",
+  "example",
+  "benchmark",
+  "benchmarks",
+]);
+
+function isUnderNonProjectDir(relativePath: string): boolean {
+  const segments = relativePath.split(path.sep).slice(0, -1);
+  return segments.some((segment) => NON_PROJECT_DIRS.has(segment.toLowerCase()));
+}
+
+function findFirstPreferringRealProjectDirs(files: string[], fileName: string): string | undefined {
+  const matches = files.filter((f) => path.basename(f) === fileName && !isUnderNonProjectDir(f));
+  return shallowest(matches);
+}
+
+function findAllByExtension(files: string[], extension: string): string[] {
+  return files.filter((f) => f.toLowerCase().endsWith(extension));
+}
+
+function findAllByNames(files: string[], names: string[]): string[] {
+  return files.filter((f) => names.includes(path.basename(f)));
+}
+
+function readAllConcatenated(rootPath: string, relativePaths: string[]): string | undefined {
+  if (relativePaths.length === 0) return undefined;
+  const contents = relativePaths
+    .map((p) => readTextIfExists(path.join(rootPath, p)))
+    .filter((content): content is string => content !== undefined);
+  return contents.length > 0 ? contents.join("\n") : undefined;
 }
 
 function pickShallowest(paths: (string | undefined)[]): string | undefined {
@@ -79,6 +118,7 @@ export function scanRepo(rootPath: string): RepoSignals {
         dependencies: (rawPackageJson.dependencies as Record<string, string>) ?? {},
         devDependencies: (rawPackageJson.devDependencies as Record<string, string>) ?? {},
         scripts: (rawPackageJson.scripts as Record<string, string>) ?? {},
+        moduleType: rawPackageJson.type === "module" ? "module" : "commonjs",
       }
     : undefined;
 
@@ -93,9 +133,11 @@ export function scanRepo(rootPath: string): RepoSignals {
       }
     : undefined;
 
-  const pyprojectCandidate = findFirst(files, "pyproject.toml");
-  const requirementsCandidate = findFirst(files, "requirements.txt");
-  const environmentYmlCandidate = findFirst(files, "environment.yml") ?? findFirst(files, "environment.yaml");
+  const pyprojectCandidate = findFirstPreferringRealProjectDirs(files, "pyproject.toml");
+  const requirementsCandidate = findFirstPreferringRealProjectDirs(files, "requirements.txt");
+  const environmentYmlCandidate =
+    findFirstPreferringRealProjectDirs(files, "environment.yml") ??
+    findFirstPreferringRealProjectDirs(files, "environment.yaml");
   // Only the shallowest of the three "wins" as the project's Python manifest — otherwise an
   // unrelated pyproject.toml nested inside a vendored/data subdirectory (e.g. a bundled dataset
   // package) would always outrank a real root-level environment.yml just by file type.
@@ -108,14 +150,24 @@ export function scanRepo(rootPath: string): RepoSignals {
   const requirementsPath = primaryPythonManifest === requirementsCandidate ? requirementsCandidate : undefined;
   const environmentYmlPath =
     primaryPythonManifest === environmentYmlCandidate ? environmentYmlCandidate : undefined;
-  const pomPath = findFirst(files, "pom.xml");
-  const buildGradlePath = findFirst(files, "build.gradle") ?? findFirst(files, "build.gradle.kts");
+  // Multi-module Maven/Gradle projects (parent + child modules) each have their own
+  // pom.xml/build.gradle, and the module that actually declares the framework/Kotlin
+  // plugin/test runner isn't necessarily the shallowest one. Aggregate all of them.
+  const pomPaths = findAllByNames(files, ["pom.xml"]);
+  const buildGradlePaths = findAllByNames(files, ["build.gradle", "build.gradle.kts"]);
   const gemfilePath = findFirst(files, "Gemfile");
   const goModPath = findFirst(files, "go.mod");
   const cargoTomlPath = findFirst(files, "Cargo.toml");
-  const csprojPath = findFirstByExtension(files, ".csproj");
+  // .NET solutions routinely split into several .csproj files (domain/infra/web/tests);
+  // picking just the "shallowest" one is close to arbitrary and often lands on a plain
+  // class library that has neither the web framework nor the test runner reference.
+  // Concatenate all of them so detection can find those references wherever they live.
+  const csprojPaths = findAllByExtension(files, ".csproj");
   const packageSwiftPath = findFirst(files, "Package.swift");
-  const pubspecYamlPath = findFirst(files, "pubspec.yaml");
+  // Melos/pub workspaces have a root pubspec.yaml that's just workspace glue (no
+  // `flutter`/`flutter_test` dependency) plus one real pubspec.yaml per package under
+  // packages/*. Aggregate all of them so the actual framework/test runner is found.
+  const pubspecYamlPaths = findAllByNames(files, ["pubspec.yaml"]);
   const cmakeListsPath = findFirst(files, "CMakeLists.txt");
   const makefilePath = findFirst(files, "Makefile") ?? findFirst(files, "makefile");
   const mixExsPath = findFirst(files, "mix.exs");
@@ -138,15 +190,15 @@ export function scanRepo(rootPath: string): RepoSignals {
     environmentYml: environmentYmlPath
       ? readTextIfExists(path.join(rootPath, environmentYmlPath))
       : undefined,
-    pomXml: pomPath ? readTextIfExists(path.join(rootPath, pomPath)) : undefined,
-    buildGradle: buildGradlePath ? readTextIfExists(path.join(rootPath, buildGradlePath)) : undefined,
+    pomXml: readAllConcatenated(rootPath, pomPaths),
+    buildGradle: readAllConcatenated(rootPath, buildGradlePaths),
     composerJson,
     gemfile: gemfilePath ? readTextIfExists(path.join(rootPath, gemfilePath)) : undefined,
     goMod: goModPath ? readTextIfExists(path.join(rootPath, goModPath)) : undefined,
     cargoToml: cargoTomlPath ? readTextIfExists(path.join(rootPath, cargoTomlPath)) : undefined,
-    csproj: csprojPath ? readTextIfExists(path.join(rootPath, csprojPath)) : undefined,
+    csproj: readAllConcatenated(rootPath, csprojPaths),
     packageSwift: packageSwiftPath ? readTextIfExists(path.join(rootPath, packageSwiftPath)) : undefined,
-    pubspecYaml: pubspecYamlPath ? readTextIfExists(path.join(rootPath, pubspecYamlPath)) : undefined,
+    pubspecYaml: readAllConcatenated(rootPath, pubspecYamlPaths),
     cmakeLists: cmakeListsPath ? readTextIfExists(path.join(rootPath, cmakeListsPath)) : undefined,
     makefile: makefilePath ? readTextIfExists(path.join(rootPath, makefilePath)) : undefined,
     mixExs: mixExsPath ? readTextIfExists(path.join(rootPath, mixExsPath)) : undefined,

@@ -12,7 +12,11 @@ function detect(signals: RepoSignals): DetectionResult | null {
   if (!source) return null;
   // A Gradle build that applies the Kotlin plugin is a Kotlin project, not Java —
   // defer entirely to the Kotlin pack instead of also reporting a spurious Java match.
-  if (/kotlin\(|org\.jetbrains\.kotlin/i.test(source)) return null;
+  // Modern Gradle projects often declare plugins via version catalogs
+  // (`alias(libs.plugins.kotlin.android)`) rather than the literal `kotlin("jvm")` or
+  // `org.jetbrains.kotlin` plugin id, so a plain word-boundary check on "kotlin" is
+  // more robust than trying to match every DSL style.
+  if (/\bkotlin\b/i.test(source)) return null;
 
   const framework: DetectionField<string> = /spring/i.test(source)
     ? { value: "spring", confidence: "high" }

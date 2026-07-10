@@ -24,6 +24,13 @@ describe("scalaPack", () => {
     expect(detection?.testRunner).toEqual({ value: "scalatest", confidence: "high" });
   });
 
+  it("detects Scalatra + specs2 with high confidence", () => {
+    const buildSbtScalatra = `libraryDependencies ++= Seq(\n  "org.scalatra" %% "scalatra" % "2.8.0",\n  "org.scalatra" %% "scalatra-specs2" % "2.8.0" % "test"\n)\n`;
+    const detection = scalaPack.detect(baseSignals({ buildSbt: buildSbtScalatra }));
+    expect(detection?.framework).toEqual({ value: "scalatra", confidence: "high" });
+    expect(detection?.testRunner).toEqual({ value: "specs2", confidence: "high" });
+  });
+
   it("marks framework low confidence when no known framework is found", () => {
     const detection = scalaPack.detect(baseSignals({ buildSbt: 'name := "app"\n' }));
     expect(detection?.framework).toEqual({ value: "none", confidence: "low" });

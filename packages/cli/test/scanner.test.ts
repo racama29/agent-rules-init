@@ -82,4 +82,111 @@ describe("scanRepo", () => {
       expect(signals.pyprojectToml).toBeUndefined();
     });
   });
+
+  describe("with a multi-project .NET solution", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-dotnet-"));
+      fs.mkdirSync(path.join(tmpDir, "src", "ApplicationCore"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "src", "ApplicationCore", "ApplicationCore.csproj"),
+        `<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Ardalis.GuardClauses" /></ItemGroup></Project>`
+      );
+      fs.mkdirSync(path.join(tmpDir, "src", "Web"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "src", "Web", "Web.csproj"),
+        `<Project Sdk="Microsoft.NET.Sdk.Web"><ItemGroup><PackageReference Include="Microsoft.AspNetCore.App" /></ItemGroup></Project>`
+      );
+      fs.mkdirSync(path.join(tmpDir, "tests", "UnitTests"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "tests", "UnitTests", "UnitTests.csproj"),
+        `<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" /></ItemGroup></Project>`
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("aggregates every .csproj in the solution instead of picking just one arbitrarily", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.csproj).toContain("Microsoft.AspNetCore.App");
+      expect(signals.csproj).toContain("xunit");
+    });
+  });
+
+  describe("with a multi-module Gradle project (Kotlin DSL)", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-gradle-"));
+      fs.mkdirSync(path.join(tmpDir, "android"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "android", "build.gradle.kts"),
+        `plugins {\n    alias(libs.plugins.kotlin.android) apply false\n}\n`
+      );
+      fs.mkdirSync(path.join(tmpDir, "ktor"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "ktor", "build.gradle.kts"),
+        `dependencies {\n    implementation("io.ktor:ktor-server-core:2.3.0")\n}\n`
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("aggregates every build.gradle.kts in the project instead of picking just one arbitrarily", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.buildGradle).toContain("kotlin.android");
+      expect(signals.buildGradle).toContain("ktor-server-core");
+    });
+  });
+
+  describe("with a Melos/pub workspace (root pubspec.yaml has no flutter dependency)", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-melos-"));
+      fs.writeFileSync(
+        path.join(tmpDir, "pubspec.yaml"),
+        "name: workspace\n\ndev_dependencies:\n  melos: ^6.0.0\n"
+      );
+      fs.mkdirSync(path.join(tmpDir, "packages", "battery_plus"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "packages", "battery_plus", "pubspec.yaml"),
+        "name: battery_plus\n\ndependencies:\n  flutter:\n    sdk: flutter\n\ndev_dependencies:\n  flutter_test:\n    sdk: flutter\n"
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("aggregates every pubspec.yaml instead of only the workspace root one", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.pubspecYaml).toContain("flutter_test");
+    });
+  });
+
+  describe("with a C++ library whose only requirements.txt is docs tooling (e.g. nlohmann/json's docs/mkdocs)", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-docs-py-"));
+      fs.writeFileSync(path.join(tmpDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\nproject(app)\n");
+      fs.mkdirSync(path.join(tmpDir, "docs", "mkdocs"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "docs", "mkdocs", "requirements.txt"), "mkdocs\nmkdocs-material\n");
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("does not treat a docs-tooling requirements.txt as the project's Python manifest", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.requirementsTxt).toBeUndefined();
+    });
+  });
 });

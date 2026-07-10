@@ -7,10 +7,21 @@ const FRAMEWORKS: [string, string][] = [
   ["go-chi/chi", "chi"],
 ];
 
+// The `module` line of go.mod is the project's own import path, not a dependency —
+// searching the whole file would false-positive on a framework whose own repo module
+// path happens to match a known framework name (e.g. gofiber/fiber's own go.mod
+// declares `module github.com/gofiber/fiber/v3`). Scope the search to `require` entries.
+function extractGoRequireSection(goMod: string): string {
+  const sections: string[] = [];
+  for (const m of goMod.matchAll(/require\s*\(([\s\S]*?)\)/g)) sections.push(m[1]);
+  for (const m of goMod.matchAll(/^require\s+(?!\()(.+)$/gm)) sections.push(m[1]);
+  return sections.length > 0 ? sections.join("\n") : goMod;
+}
+
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.goMod;
   if (!source) return null;
-  const lower = source.toLowerCase();
+  const lower = extractGoRequireSection(source).toLowerCase();
 
   let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
   for (const [needle, label] of FRAMEWORKS) {

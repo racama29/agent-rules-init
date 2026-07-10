@@ -3,6 +3,7 @@ export interface PackageJsonManifest {
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   scripts: Record<string, string>;
+  moduleType: "module" | "commonjs";
 }
 
 export interface ComposerJsonManifest {
@@ -50,6 +51,8 @@ export interface DetectionResult {
   packageManager?: DetectionField<string>;
   testRunner?: DetectionField<string>;
   linter?: DetectionField<string>;
+  usesTypeScript?: boolean;
+  moduleFormat?: "module" | "commonjs";
 }
 
 export interface RuleSet {

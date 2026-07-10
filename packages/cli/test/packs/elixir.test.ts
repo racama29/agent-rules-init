@@ -28,6 +28,12 @@ describe("elixirPack", () => {
     expect(detection?.framework).toEqual({ value: "phoenix", confidence: "high" });
   });
 
+  it("does not mistake sibling packages (phoenix_pubsub) or the project's own app name for a real phoenix dependency (e.g. Phoenix's own mix.exs)", () => {
+    const phoenixOwnMixExs = `defmodule Phoenix.MixProject do\n  use Mix.Project\n\n  def project do\n    [\n      app: :phoenix,\n      name: "Phoenix"\n    ]\n  end\n\n  defp deps do\n    [\n      {:phoenix_pubsub, "~> 2.1"},\n      {:phoenix_template, "~> 1.0"}\n    ]\n  end\nend\n`;
+    const detection = elixirPack.detect(baseSignals({ mixExs: phoenixOwnMixExs }));
+    expect(detection?.framework).toEqual({ value: "none", confidence: "low" });
+  });
+
   it("marks framework low confidence when Phoenix is not referenced", () => {
     const detection = elixirPack.detect(
       baseSignals({ mixExs: "defmodule MyApp.MixProject do\n  use Mix.Project\nend\n" })

@@ -61,19 +61,39 @@ function detect(signals: RepoSignals): DetectionResult | null {
     ? { value: "npm", confidence: "high" }
     : { value: "npm", confidence: "low" };
 
-  return { packId: "js-ts", language: "TypeScript/JavaScript", framework, testRunner, linter, packageManager };
+  const usesTypeScript = Boolean(allDeps.typescript) || signals.hasFile("tsconfig.json");
+  const moduleFormat = signals.packageJson.moduleType;
+
+  return {
+    packId: "js-ts",
+    language: usesTypeScript ? "TypeScript" : "JavaScript",
+    framework,
+    testRunner,
+    linter,
+    packageManager,
+    usesTypeScript,
+    moduleFormat,
+  };
 }
 
 function rules(detection: DetectionResult): RuleSet {
   const framework = detection.framework?.value ?? "none";
   const testRunner = detection.testRunner?.value ?? "unknown";
+  const conventions: string[] = [];
+  if (detection.usesTypeScript) {
+    conventions.push("Usa TypeScript estricto; evita `any` salvo justificación explícita.");
+  }
+  conventions.push(
+    `Ejecuta los tests con ${testRunner === "unknown" ? "el test runner del proyecto" : testRunner} antes de dar por terminada una tarea.`
+  );
+  conventions.push(
+    detection.moduleFormat === "module"
+      ? "Sigue el estilo de módulos ES existente (import/export), no mezcles con require()."
+      : "Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export."
+  );
   return {
-    summary: `Proyecto JavaScript/TypeScript${framework !== "none" ? ` con ${framework}` : ""}.`,
-    conventions: [
-      "Usa TypeScript estricto; evita `any` salvo justificación explícita.",
-      `Ejecuta los tests con ${testRunner === "unknown" ? "el test runner del proyecto" : testRunner} antes de dar por terminada una tarea.`,
-      "Sigue el estilo de módulos ES existente (import/export), no mezcles con require().",
-    ],
+    summary: `Proyecto ${detection.usesTypeScript ? "TypeScript" : "JavaScript"}${framework !== "none" ? ` con ${framework}` : ""}.`,
+    conventions,
     architectureNotes: [
       "Mantén los componentes/módulos pequeños y con una responsabilidad clara.",
       "Coloca los tests junto al código que prueban o en un directorio `test/` espejo, según lo que ya use el repo.",
