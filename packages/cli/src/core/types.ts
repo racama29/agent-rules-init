@@ -71,6 +71,32 @@ export interface PromptTemplate {
   body: string;
 }
 
+export type CommandSource = "npm" | "composer" | "make" | "mix" | "tox";
+
+export interface CommandEntry {
+  source: CommandSource;
+  invocation: string; // "npm test", "composer lint", "make docs", "mix setup", "tox -e py311"
+  detail?: string; // cuerpo del script cuando es legible (npm/composer)
+}
+
+export interface DirEntry {
+  dir: string; // "src/"
+  note?: string; // solo si el significado del directorio es inequívoco
+}
+
+export interface CiCommand {
+  command: string;
+  workflow: string; // nombre de archivo, p. ej. "ci.yml"
+}
+
+export interface RepoFacts {
+  commands: CommandEntry[];
+  omittedCommands: { source: CommandSource; count: number }[];
+  structure: DirEntry[];
+  ciCommands: CiCommand[];
+  omittedCiCount: number;
+}
+
 export interface Pack {
   id: string;
   detect(signals: RepoSignals): DetectionResult | null;
