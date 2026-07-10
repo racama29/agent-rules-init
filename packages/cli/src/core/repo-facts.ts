@@ -16,6 +16,22 @@ export function extractNpmCommands(signals: RepoSignals): CommandEntry[] {
   return entries;
 }
 
+export function extractMakeTargets(signals: RepoSignals): CommandEntry[] {
+  const makefile = signals.makefile;
+  if (!makefile) return [];
+  const targets = new Set<string>();
+  for (const line of makefile.split(/\r?\n/)) {
+    // Un target va a inicio de línea (las recetas van indentadas con tab) y su nombre
+    // no lleva %, ni empieza por "." (targets especiales tipo .PHONY). El (?!=) evita
+    // asignaciones ":=". La clase de caracteres ya excluye espacios, con lo que
+    // "CFLAGS :=", los comentarios "#" y las URLs en comentarios tampoco matchean.
+    const match = /^([A-Za-z0-9_/-][A-Za-z0-9_./-]*)\s*:(?!=)/.exec(line);
+    if (!match) continue;
+    targets.add(match[1]);
+  }
+  return [...targets].map((target) => ({ source: "make" as const, invocation: `make ${target}` }));
+}
+
 export function extractComposerCommands(signals: RepoSignals): CommandEntry[] {
   const scripts = signals.composerJson?.scripts ?? {};
   const entries: CommandEntry[] = [];
