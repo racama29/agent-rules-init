@@ -39,6 +39,16 @@ describe("resolveCliAction", () => {
   it("reports an unknown flag instead of silently running the scan", () => {
     expect(resolveCliAction(["--wat"])).toEqual({ kind: "unknown", flag: "--wat" });
   });
+
+  it("parses --lang with space and = forms", () => {
+    expect(resolveCliAction(["--lang", "en"])).toEqual({ kind: "run", lang: "en" });
+    expect(resolveCliAction(["--lang=es"])).toEqual({ kind: "run", lang: "es" });
+  });
+
+  it("rejects an invalid --lang value", () => {
+    expect(resolveCliAction(["--lang", "fr"])).toEqual({ kind: "invalid-lang", value: "fr" });
+    expect(resolveCliAction(["--lang"])).toEqual({ kind: "invalid-lang", value: "" });
+  });
 });
 
 describe("getVersion", () => {

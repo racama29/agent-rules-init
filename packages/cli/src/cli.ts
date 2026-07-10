@@ -11,6 +11,7 @@ import {
   type RenderEntry,
 } from "./core/templates.js";
 import { buildRepoFacts } from "./core/repo-facts.js";
+import type { Lang } from "./core/i18n.js";
 import {
   collectLowConfidenceQuestions,
   askQuestions,
@@ -125,17 +126,31 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
 }
 
 export type CliAction =
-  | { kind: "run" }
+  | { kind: "run"; lang?: Lang }
   | { kind: "help" }
   | { kind: "version" }
+  | { kind: "invalid-lang"; value: string }
   | { kind: "unknown"; flag: string };
 
+function isLang(value: string | undefined): value is Lang {
+  return value === "es" || value === "en";
+}
+
 export function resolveCliAction(argv: string[]): CliAction {
-  const [first] = argv;
-  if (first === "--help" || first === "-h") return { kind: "help" };
-  if (first === "--version" || first === "-v") return { kind: "version" };
-  if (first !== undefined) return { kind: "unknown", flag: first };
-  return { kind: "run" };
+  let lang: Lang | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--help" || arg === "-h") return { kind: "help" };
+    if (arg === "--version" || arg === "-v") return { kind: "version" };
+    if (arg === "--lang" || arg.startsWith("--lang=")) {
+      const value = arg.startsWith("--lang=") ? arg.slice("--lang=".length) : argv[++i] ?? "";
+      if (!isLang(value)) return { kind: "invalid-lang", value };
+      lang = value;
+      continue;
+    }
+    return { kind: "unknown", flag: arg };
+  }
+  return lang ? { kind: "run", lang } : { kind: "run" };
 }
 
 export function getVersion(): string {
@@ -167,6 +182,11 @@ export async function main(): Promise<void> {
   }
   if (action.kind === "unknown") {
     console.error(`Opción no reconocida: ${action.flag}\n\n${USAGE}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (action.kind === "invalid-lang") {
+    console.error(`Valor de --lang no válido: "${action.value}" (usa "es" o "en").\n\n${USAGE}`);
     process.exitCode = 1;
     return;
   }
