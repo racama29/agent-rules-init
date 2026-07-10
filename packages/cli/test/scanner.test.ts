@@ -30,6 +30,33 @@ describe("scanRepo", () => {
     expect(signals.requirementsTxt).toContain("fastapi");
   });
 
+  describe("with manifests saved as UTF-8 with BOM (common on Windows editors)", () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-bom-"));
+      fs.writeFileSync(
+        path.join(tmpDir, "package.json"),
+        "\uFEFF" + JSON.stringify({ dependencies: { express: "^4.19.0" }, devDependencies: {}, scripts: {} })
+      );
+      fs.writeFileSync(path.join(tmpDir, "go.mod"), "\uFEFFmodule example.com/app\n");
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("still parses package.json instead of silently dropping it", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.packageJson?.dependencies.express).toBe("^4.19.0");
+    });
+
+    it("strips the BOM from text manifests so line-anchored regexes keep working", () => {
+      const signals = scanRepo(tmpDir);
+      expect(signals.goMod?.startsWith("module")).toBe(true);
+    });
+  });
+
   describe("with a nested package.json that alphabetically precedes the root one", () => {
     let tmpDir: string;
 

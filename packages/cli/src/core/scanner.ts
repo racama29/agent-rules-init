@@ -28,10 +28,16 @@ function walk(rootPath: string): string[] {
   return results;
 }
 
+// Windows editors (Notepad, PowerShell's Set-Content, some IDE defaults) save UTF-8
+// with a leading BOM, which JSON.parse rejects and line-anchored regexes trip over.
+function stripBom(content: string): string {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
+
 function readJsonIfExists(filePath: string): Record<string, unknown> | undefined {
   if (!fs.existsSync(filePath)) return undefined;
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return JSON.parse(stripBom(fs.readFileSync(filePath, "utf-8")));
   } catch {
     return undefined;
   }
@@ -40,7 +46,7 @@ function readJsonIfExists(filePath: string): Record<string, unknown> | undefined
 function readTextIfExists(filePath: string): string | undefined {
   if (!fs.existsSync(filePath)) return undefined;
   try {
-    return fs.readFileSync(filePath, "utf-8");
+    return stripBom(fs.readFileSync(filePath, "utf-8"));
   } catch {
     return undefined;
   }
