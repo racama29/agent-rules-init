@@ -25,11 +25,19 @@ describe("detectAvailableAssistants", () => {
 });
 
 describe("polishWithAssistant", () => {
-  it("passes the content as a prompt and returns stdout", async () => {
+  it("passes the content via stdin (never as a CLI argument) and returns stdout", async () => {
     const execFn = vi.fn().mockResolvedValue({ stdout: "polished content", exitCode: 0 });
     const result = await polishWithAssistant("claude", "raw content", execFn);
     expect(result).toBe("polished content");
-    expect(execFn).toHaveBeenCalledWith("claude", ["-p", expect.stringContaining("raw content")]);
+    expect(execFn).toHaveBeenCalledWith("claude", ["-p"], expect.stringContaining("raw content"));
+  });
+
+  it("includes multi-line content in stdin without truncation", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: "polished", exitCode: 0 });
+    const multilineContent = "# Title\n\n- one\n- two\n\n## Section\nsome text";
+    await polishWithAssistant("claude", multilineContent, execFn);
+    const stdinArg = execFn.mock.calls[0][2];
+    expect(stdinArg).toContain(multilineContent);
   });
 
   it("falls back to the original content if the exec call fails", async () => {
