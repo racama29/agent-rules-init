@@ -5,8 +5,10 @@ import {
   extractMakeTargets,
   extractMixAliases,
   extractToxEnvs,
+  filterCommands,
+  extractStructure,
 } from "../src/core/repo-facts.js";
-import type { RepoSignals } from "../src/core/types.js";
+import type { CommandEntry, RepoSignals } from "../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };
@@ -131,5 +133,49 @@ describe("extractToxEnvs", () => {
     expect(extractToxEnvs(baseSignals({}))).toEqual([]);
     const entries = extractToxEnvs(baseSignals({ toxIni: "[tox]\nenvlist = py3{10,11}, docs\n" }));
     expect(entries).toEqual([{ source: "tox", invocation: "tox -e docs" }]);
+  });
+});
+
+describe("filterCommands", () => {
+  const mk = (n: number): CommandEntry[] =>
+    Array.from({ length: n }, (_, i) => ({ source: "npm" as const, invocation: `npm run task${i}`, detail: "x" }));
+
+  it("keeps everything under the per-source cap and reports nothing omitted", () => {
+    const { kept, omitted } = filterCommands(mk(3));
+    expect(kept).toHaveLength(3);
+    expect(omitted).toEqual([]);
+  });
+
+  it("caps at 15 per source, always keeping well-known names, and reports the omitted count", () => {
+    const entries = [...mk(20), { source: "npm" as const, invocation: "npm test", detail: "vitest" }];
+    const { kept, omitted } = filterCommands(entries);
+    expect(kept).toHaveLength(15);
+    expect(kept).toContainEqual({ source: "npm", invocation: "npm test", detail: "vitest" });
+    expect(omitted).toEqual([{ source: "npm", count: 6 }]);
+  });
+
+  it("applies the cap per source, not globally", () => {
+    const make = Array.from({ length: 10 }, (_, i) => ({ source: "make" as const, invocation: `make t${i}` }));
+    const { kept, omitted } = filterCommands([...mk(10), ...make]);
+    expect(kept).toHaveLength(20);
+    expect(omitted).toEqual([]);
+  });
+});
+
+describe("extractStructure", () => {
+  it("lists top-level dirs sorted, annotating only unequivocal names", () => {
+    const files = ["src/index.ts", "src/deep/a.ts", "tests/a.test.ts", "weirddir/x.txt", "README.md"];
+    const dirs = extractStructure(baseSignals({ files }));
+    expect(dirs).toEqual([
+      { dir: "src/", note: "código fuente" },
+      { dir: "tests/", note: "tests" },
+      { dir: "weirddir/" },
+    ]);
+  });
+
+  it("caps at 20 dirs and returns [] for a flat repo", () => {
+    expect(extractStructure(baseSignals({ files: ["README.md"] }))).toEqual([]);
+    const files = Array.from({ length: 30 }, (_, i) => `dir${String(i).padStart(2, "0")}/f.txt`);
+    expect(extractStructure(baseSignals({ files }))).toHaveLength(20);
   });
 });

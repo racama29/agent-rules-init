@@ -1,4 +1,5 @@
-import type { CommandEntry, RepoSignals } from "./types.js";
+import path from "node:path";
+import type { CommandEntry, CommandSource, DirEntry, RepoSignals } from "./types.js";
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
 
@@ -77,4 +78,74 @@ export function extractComposerCommands(signals: RepoSignals): CommandEntry[] {
     entries.push({ source: "composer", invocation: `composer ${name}`, detail: parts.join(" && ") });
   }
   return entries;
+}
+
+const WELL_KNOWN_NAMES = new Set([
+  "test", "tests", "build", "lint", "fmt", "format", "check", "dev", "start",
+  "typecheck", "ci", "coverage", "e2e", "unit", "docs", "clean", "install",
+  "setup", "release", "watch", "fix", "all",
+]);
+const MAX_COMMANDS_PER_SOURCE = 15;
+
+function invocationName(entry: CommandEntry): string {
+  const parts = entry.invocation.split(" ");
+  return parts[parts.length - 1];
+}
+
+export function filterCommands(entries: CommandEntry[]): {
+  kept: CommandEntry[];
+  omitted: { source: CommandSource; count: number }[];
+} {
+  const kept: CommandEntry[] = [];
+  const omitted: { source: CommandSource; count: number }[] = [];
+  const sources = [...new Set(entries.map((e) => e.source))];
+  for (const source of sources) {
+    const group = entries.filter((e) => e.source === source);
+    const wellKnown = group.filter((e) => WELL_KNOWN_NAMES.has(invocationName(e)));
+    const rest = group.filter((e) => !WELL_KNOWN_NAMES.has(invocationName(e)));
+    const keptGroup = new Set([...wellKnown, ...rest].slice(0, MAX_COMMANDS_PER_SOURCE));
+    // Se emite en el orden original del manifiesto, no con los conocidos primero.
+    kept.push(...group.filter((e) => keptGroup.has(e)));
+    const omittedCount = group.length - keptGroup.size;
+    if (omittedCount > 0) omitted.push({ source, count: omittedCount });
+  }
+  return { kept, omitted };
+}
+
+const DIR_NOTES: Record<string, string> = {
+  src: "código fuente",
+  lib: "código fuente",
+  tests: "tests",
+  test: "tests",
+  spec: "tests",
+  __tests__: "tests",
+  docs: "documentación",
+  doc: "documentación",
+  examples: "ejemplos",
+  scripts: "scripts auxiliares",
+  tools: "herramientas auxiliares",
+  migrations: "migraciones de base de datos",
+  benchmarks: "benchmarks",
+  ".github": "workflows y configuración de GitHub",
+  public: "activos públicos",
+  static: "activos estáticos",
+  assets: "activos",
+  config: "configuración",
+};
+const MAX_DIRS = 20;
+
+export function extractStructure(signals: RepoSignals): DirEntry[] {
+  const dirs = new Set<string>();
+  for (const file of signals.files) {
+    const normalized = file.split(path.sep).join("/");
+    const slash = normalized.indexOf("/");
+    if (slash > 0) dirs.add(normalized.slice(0, slash));
+  }
+  return [...dirs]
+    .sort()
+    .slice(0, MAX_DIRS)
+    .map((dir) => {
+      const note = DIR_NOTES[dir.toLowerCase()];
+      return note ? { dir: `${dir}/`, note } : { dir: `${dir}/` };
+    });
 }
