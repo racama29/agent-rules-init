@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { renderClaudeMd, renderAgentsMd, renderCopilotInstructions, renderPromptFiles } from "../src/core/templates.js";
-import type { DetectionResult, RuleSet, PromptTemplate } from "../src/core/types.js";
+import {
+  renderClaudeMd,
+  renderAgentsMd,
+  renderCopilotInstructions,
+  renderPromptFiles,
+  renderRepoFacts,
+} from "../src/core/templates.js";
+import type { DetectionResult, RuleSet, PromptTemplate, RepoFacts } from "../src/core/types.js";
 
 const detection: DetectionResult = {
   packId: "js-ts",
@@ -13,6 +19,19 @@ const ruleSet: RuleSet = {
   architectureNotes: ["Mantén los componentes pequeños."],
 };
 const entries = [{ detection, ruleSet }];
+
+const facts: RepoFacts = {
+  commands: [
+    { source: "npm", invocation: "npm test", detail: "vitest run --coverage" },
+    { source: "make", invocation: "make docs" },
+  ],
+  omittedCommands: [{ source: "npm", count: 4 }],
+  structure: [{ dir: "src/", note: "código fuente" }, { dir: "weirddir/" }],
+  ciCommands: [{ command: "npm ci", workflow: "ci.yml" }],
+  omittedCiCount: 0,
+};
+
+const emptyFacts: RepoFacts = { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0 };
 
 describe("templates", () => {
   it("renders CLAUDE.md including each pack's summary and conventions", () => {
@@ -40,6 +59,39 @@ describe("templates", () => {
       ".github/prompts/js-ts-review.generated.prompt.md",
     ]);
     expect(files[0].content).toContain("Revisa el diff.");
+  });
+
+  it("renders the repo facts sections with per-line source attribution", () => {
+    const output = renderRepoFacts(facts);
+    expect(output).toContain("## Comandos del repo");
+    expect(output).toContain("- `npm test` → `vitest run --coverage` (package.json)");
+    expect(output).toContain("- `make docs` (Makefile)");
+    expect(output).toContain("…y 4 más en package.json");
+    expect(output).toContain("## Estructura");
+    expect(output).toContain("- `src/` — código fuente");
+    expect(output).toContain("- `weirddir/`");
+    expect(output).toContain("## Lo que ejecuta CI (GitHub Actions)");
+    expect(output).toContain("- `npm ci` (ci.yml)");
+  });
+
+  it("omits every empty facts section and returns empty string for empty facts", () => {
+    expect(renderRepoFacts(emptyFacts)).toBe("");
+    const onlyStructure = { ...emptyFacts, structure: [{ dir: "src/" }] };
+    const output = renderRepoFacts(onlyStructure);
+    expect(output).toContain("## Estructura");
+    expect(output).not.toContain("## Comandos del repo");
+    expect(output).not.toContain("## Lo que ejecuta CI");
+  });
+
+  it("appends the facts sections after the stack sections in CLAUDE.md", () => {
+    const output = renderClaudeMd(entries, facts);
+    expect(output.indexOf("## Comandos del repo")).toBeGreaterThan(output.indexOf("### Convenciones"));
+  });
+
+  it("keeps output identical to today when facts are omitted or empty", () => {
+    expect(renderClaudeMd(entries)).toBe(renderClaudeMd(entries, emptyFacts));
+    expect(renderAgentsMd(entries, facts)).toContain("## Comandos del repo");
+    expect(renderCopilotInstructions(entries, facts)).toContain("## Comandos del repo");
   });
 
   it("does not collide when two different packs render the same template id", () => {
