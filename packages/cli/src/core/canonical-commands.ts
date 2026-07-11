@@ -92,13 +92,51 @@ function fromCi(ciCommands: CiCommand[]): CanonicalCommand[] {
   return found;
 }
 
+function fromSignals(signals: RepoSignals): CanonicalCommand[] {
+  const out: CanonicalCommand[] = [];
+
+  if (signals.pomXml) {
+    const hasWrapper = signals.hasFile("mvnw") || signals.hasFile("mvnw.cmd");
+    out.push({
+      kind: "test",
+      command: hasWrapper ? "./mvnw test" : "mvn test",
+      source: hasWrapper ? "mvnw" : "pom.xml",
+      confidence: hasWrapper ? "high" : "low",
+      scope: ".",
+    });
+  } else if (signals.buildGradle) {
+    const hasWrapper = signals.hasFile("gradlew") || signals.hasFile("gradlew.bat");
+    out.push({
+      kind: "test",
+      command: hasWrapper ? "./gradlew test" : "gradle test",
+      source: hasWrapper ? "gradlew" : "build.gradle",
+      confidence: hasWrapper ? "high" : "low",
+      scope: ".",
+    });
+  }
+
+  const pythonManifest = signals.pyprojectToml ?? signals.requirementsTxt ?? signals.environmentYml;
+  const hasPytest = pythonManifest !== undefined && /\bpytest\b/i.test(pythonManifest);
+  if (hasPytest && signals.hasFile("uv.lock")) {
+    out.push({ kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "high", scope: "." });
+  } else if (hasPytest && signals.hasFile("poetry.lock")) {
+    out.push({ kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "high", scope: "." });
+  } else if (signals.toxIni) {
+    out.push({ kind: "test", command: "tox", source: "tox.ini", confidence: "high", scope: "." });
+  } else if (hasPytest) {
+    out.push({ kind: "test", command: "pytest", source: "pyproject.toml", confidence: "low", scope: "." });
+  }
+
+  return out;
+}
+
 export function selectCanonicalCommands(
   signals: RepoSignals,
   commands: CommandEntry[],
   ciCommands: CiCommand[]
 ): CanonicalCommand[] {
   const byKind = new Map<CanonicalCommand["kind"], CanonicalCommand>();
-  for (const candidate of [...fromScripts(commands), ...fromCi(ciCommands)]) {
+  for (const candidate of [...fromScripts(commands), ...fromCi(ciCommands), ...fromSignals(signals)]) {
     if (!byKind.has(candidate.kind)) byKind.set(candidate.kind, candidate);
   }
   return KIND_ORDER.flatMap((kind) => byKind.get(kind) ?? []);

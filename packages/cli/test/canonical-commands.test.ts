@@ -57,3 +57,43 @@ describe("selectCanonicalCommands", () => {
     ]);
   });
 });
+
+describe("selectCanonicalCommands language fallbacks", () => {
+  it("uses the Maven wrapper when present", () => {
+    const signals = baseSignals({ pomXml: "<project/>", hasFile: (p) => p === "mvnw" });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "./mvnw test", source: "mvnw", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("uses plain mvn only when no wrapper exists", () => {
+    const signals = baseSignals({ pomXml: "<project/>" });
+    expect(selectCanonicalCommands(signals, [], none)[0]).toMatchObject({
+      command: "mvn test", source: "pom.xml", confidence: "low",
+    });
+  });
+
+  it("prefers uv run pytest when uv.lock and pytest are present", () => {
+    const signals = baseSignals({
+      pyprojectToml: '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["pytest"]\n',
+      hasFile: (p) => p === "uv.lock",
+    });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("falls back to tox when only tox.ini decides", () => {
+    const signals = baseSignals({ requirementsTxt: "flask\n", toxIni: "[tox]\nenv_list = py311\n" });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "tox", source: "tox.ini", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("CI beats a signal fallback", () => {
+    const signals = baseSignals({ pomXml: "<project/>", hasFile: (p) => p === "mvnw" });
+    const ci: CiCommand[] = [{ command: "./mvnw -B verify", workflow: "build.yml" }];
+    const result = selectCanonicalCommands(signals, [], ci);
+    expect(result[0].command).toBe("./mvnw -B verify");
+  });
+});
