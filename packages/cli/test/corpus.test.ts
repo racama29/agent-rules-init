@@ -47,3 +47,35 @@ describe("corpus snapshots", () => {
     expect(Object.fromEntries(second)).toEqual(Object.fromEntries(first));
   });
 });
+
+describe("content quality gates", () => {
+  it("Express, Flask and Petclinic fixtures produce clearly distinct rules", async () => {
+    const express = await renderCorpus("node-express-mocha", "en");
+    const flask = await renderCorpus("python-uv-tox", "en");
+    const petclinic = await renderCorpus("java-spring-maven", "en");
+    const claude = (m: Map<string, string>) => m.get("CLAUDE.generated.md")!;
+    expect(claude(express)).not.toBe(claude(flask));
+    expect(claude(flask)).not.toBe(claude(petclinic));
+    expect(claude(express)).toContain("npm test");
+    expect(claude(flask)).toContain("uv run pytest");
+    expect(claude(petclinic)).toContain("./mvnw");
+  });
+
+  it("every review prompt in the corpus contains at least one backticked command", async () => {
+    for (const fixture of ["node-express-mocha", "python-uv-tox", "java-spring-maven"] as const) {
+      const files = await renderCorpus(fixture, "en");
+      const reviews = [...files.entries()].filter(([p]) => p.includes("-review.generated"));
+      expect(reviews.length).toBeGreaterThan(0);
+      for (const [, content] of reviews) {
+        expect(content).toMatch(/`[^`]+`/);
+      }
+    }
+  });
+
+  it("a plain JavaScript fixture never mentions TypeScript", async () => {
+    const files = await renderCorpus("node-express-mocha", "en");
+    for (const [, content] of files) {
+      expect(content).not.toMatch(/TypeScript/);
+    }
+  });
+});
