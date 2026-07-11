@@ -14,6 +14,13 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { canonicalOf } from "../core/canonical-commands.js";
+import type { PackContext } from "../core/types.js";
+
+const SPRING_RISK: Record<Lang, string> = {
+  es: "Presta especial atención a los límites de transacción (@Transactional), la inyección de dependencias y la separación controller/service/repository.",
+  en: "Pay special attention to transaction boundaries (@Transactional), dependency injection and the controller/service/repository separation.",
+};
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pomXml ?? signals.buildGradle;
@@ -69,16 +76,17 @@ const TEXTS: Record<Lang, { naming: string; deps: string; arch: string[]; review
   },
 };
 
-function rules(detection: DetectionResult, lang: Lang): RuleSet {
+function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleSet {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
-  const testCmd = detection.packageManager?.value === "maven wrapper"
+  const wrapperCmd = detection.packageManager?.value === "maven wrapper"
     ? "./mvnw test"
     : detection.packageManager?.value === "maven"
     ? "mvn test"
     : detection.packageManager?.value === "gradle wrapper"
     ? "./gradlew test"
     : "gradle test";
+  const testCmd = canonicalOf(ctx, "test")?.command ?? wrapperCmd;
   return {
     summary: summarySentence(lang, "Java", framework, detection.packageManager?.value),
     conventions: [t.naming, runTestsConvention(lang, testCmd), t.deps],
@@ -86,14 +94,46 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
   };
 }
 
-function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackContext): PromptTemplate[] {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
+  const test = canonicalOf(ctx, "test");
+  const build = canonicalOf(ctx, "build");
+  const testDirs = ctx?.facts.testDirs ?? [];
+  const es = lang === "es";
+
+  const reviewParts: string[] = [];
+  reviewParts.push(
+    es
+      ? `Revisa el diff actual contra las convenciones Java de este repositorio${framework ? ` (${framework})` : ""}.`
+      : `Review the current diff against this repository's Java conventions${framework ? ` (${framework})` : ""}.`
+  );
+  if (test) {
+    reviewParts.push(es ? `Ejecuta \`${test.command}\` antes de dar por buena la revisión.` : `Run \`${test.command}\` before approving the review.`);
+  }
+  if (build && build.command !== test?.command) {
+    reviewParts.push(es ? `CI también ejecuta \`${build.command}\`.` : `CI also runs \`${build.command}\`.`);
+  }
+  if (framework === "spring") reviewParts.push(SPRING_RISK[lang]);
+  reviewParts.push(es ? `Busca también bugs: ${t.reviewFocus}.` : `Also look for bugs: ${t.reviewFocus}.`);
+  if (testDirs.length > 0) {
+    const dirs = testDirs.map((d) => `\`${d}\``).join(", ");
+    reviewParts.push(es ? `Los tests viven en ${dirs}.` : `Tests live under ${dirs}.`);
+  }
+  reviewParts.push(es ? "Señala solo hallazgos concretos con archivo y línea." : "Report only concrete findings with file and line references.");
+
+  const testingParts: string[] = [testingBody(lang, runner)];
+  if (test) testingParts.push(es ? `Verifica la suite con \`${test.command}\` antes de terminar.` : `Verify the suite with \`${test.command}\` before finishing.`);
+  if (testDirs.length > 0) {
+    const dirs = testDirs.map((d) => `\`${d}\``).join(", ");
+    testingParts.push(es ? `Coloca los tests nuevos en ${dirs}.` : `Place new tests under ${dirs}.`);
+  }
+
   return [
-    { id: "review", title: "Code Review (Java)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "review", title: "Code Review (Java)", body: ctx ? reviewParts.join(" ") : reviewBody(lang, t.reviewFocus, framework) },
     { id: "refactor", title: "Refactor (Java)", body: refactorBody(lang) },
-    { id: "testing", title: "Testing (Java)", body: testingBody(lang, runner) },
+    { id: "testing", title: "Testing (Java)", body: ctx ? testingParts.join(" ") : testingBody(lang, runner) },
   ];
 }
 

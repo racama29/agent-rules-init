@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { javaPack } from "../../src/packs/java.js";
 import type { RepoSignals } from "../../src/core/types.js";
+import { buildRepoFacts } from "../../src/core/repo-facts.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };
@@ -76,5 +77,45 @@ describe("javaPack", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
     const templates = javaPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
+  });
+});
+
+function petclinicLikeSignalsAndDetection() {
+  const signals = baseSignals({
+    files: [
+      "pom.xml", "mvnw", "build.gradle", "gradlew",
+      "src/main/java/demo/App.java", "src/test/java/demo/AppTest.java",
+    ],
+    hasFile: (p) => ["mvnw", "mvnw.cmd", "gradlew"].includes(p),
+    pomXml: "<project>spring junit</project>",
+    buildGradle: "plugins { id 'java' }",
+    githubWorkflows: [{
+      path: ".github/workflows/build.yml",
+      content: "jobs:\n  maven:\n    steps:\n      - run: ./mvnw -B verify\n  gradle:\n    steps:\n      - run: ./gradlew build\n",
+    }],
+  });
+  const detection = javaPack.detect(signals)!;
+  const ctx = { facts: buildRepoFacts(signals, "en") };
+  return { detection, ctx };
+}
+
+describe("enriched java prompts", () => {
+  it("review prompt cites the wrapper command from CI and the Maven test layout", () => {
+    const { detection, ctx } = petclinicLikeSignalsAndDetection();
+    const review = javaPack.promptTemplates(detection, "en", ctx).find((t) => t.id === "review")!;
+    expect(review.body).toContain("`./mvnw -B verify`");
+    expect(review.body).toContain("src/test/");
+    expect(review.body).toMatch(/gradlew build/);
+  });
+
+  it("rules use the canonical command", () => {
+    const { detection, ctx } = petclinicLikeSignalsAndDetection();
+    const ruleSet = javaPack.rules(detection, "en", ctx);
+    expect(ruleSet.conventions.join("\n")).toContain("./mvnw -B verify");
+  });
+
+  it("prompts still render without a context", () => {
+    const { detection } = petclinicLikeSignalsAndDetection();
+    expect(javaPack.promptTemplates(detection, "en")).toHaveLength(3);
   });
 });

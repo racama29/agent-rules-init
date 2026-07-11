@@ -3,6 +3,7 @@ import type {
   CiCommand,
   CommandEntry,
   CommandSource,
+  PackContext,
   RepoSignals,
 } from "./types.js";
 
@@ -140,4 +141,11 @@ export function selectCanonicalCommands(
     if (!byKind.has(candidate.kind)) byKind.set(candidate.kind, candidate);
   }
   return KIND_ORDER.flatMap((kind) => byKind.get(kind) ?? []);
+}
+
+export function canonicalOf(
+  ctx: PackContext | undefined,
+  kind: CanonicalCommand["kind"]
+): CanonicalCommand | undefined {
+  return ctx?.facts.canonical.find((c) => c.kind === kind && c.confidence === "high");
 }

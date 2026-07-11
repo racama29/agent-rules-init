@@ -8,11 +8,11 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/java-review.generated.md": "# Code Review (Java)
 
-Review the current diff looking for bugs, null-safety and deviations from spring conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Java conventions (spring). Run \`./mvnw -B verify\` before approving the review. CI also runs \`./gradlew build\`. Pay special attention to transaction boundaries (@Transactional), dependency injection and the controller/service/repository separation. Also look for bugs: null-safety. Tests live under \`src/test/\`, \`src/test/java/\`. Report only concrete findings with file and line references.
 ",
   ".claude/commands/java-testing.generated.md": "# Testing (Java)
 
-Write tests with junit for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with junit for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`./mvnw -B verify\` before finishing. Place new tests under \`src/test/\`, \`src/test/java/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -24,7 +24,7 @@ Java project using spring (maven wrapper).
 
 ### Conventions
 - Follow standard Java naming conventions (PascalCase for classes, camelCase for methods).
-- Run the tests with ./mvnw test before finishing a task.
+- Run the tests with ./mvnw -B verify before finishing a task.
 - Do not add new dependencies without declaring them in the existing build tool.
 
 ### Architecture
@@ -53,11 +53,11 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/java-review.generated.prompt.md": "# Code Review (Java)
 
-Review the current diff looking for bugs, null-safety and deviations from spring conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Java conventions (spring). Run \`./mvnw -B verify\` before approving the review. CI also runs \`./gradlew build\`. Pay special attention to transaction boundaries (@Transactional), dependency injection and the controller/service/repository separation. Also look for bugs: null-safety. Tests live under \`src/test/\`, \`src/test/java/\`. Report only concrete findings with file and line references.
 ",
   ".github/prompts/java-testing.generated.prompt.md": "# Testing (Java)
 
-Write tests with junit for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with junit for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`./mvnw -B verify\` before finishing. Place new tests under \`src/test/\`, \`src/test/java/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -69,7 +69,7 @@ Java project using spring (maven wrapper).
 
 ### Conventions
 - Follow standard Java naming conventions (PascalCase for classes, camelCase for methods).
-- Run the tests with ./mvnw test before finishing a task.
+- Run the tests with ./mvnw -B verify before finishing a task.
 - Do not add new dependencies without declaring them in the existing build tool.
 
 ### Architecture
@@ -102,7 +102,7 @@ Java project using spring (maven wrapper).
 
 ### Conventions
 - Follow standard Java naming conventions (PascalCase for classes, camelCase for methods).
-- Run the tests with ./mvnw test before finishing a task.
+- Run the tests with ./mvnw -B verify before finishing a task.
 - Do not add new dependencies without declaring them in the existing build tool.
 
 ### Architecture
@@ -136,11 +136,11 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/java-review.generated.md": "# Code Review (Java)
 
-Revisa el diff actual buscando bugs, null-safety y desviaciones de las convenciones de spring. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Java de este repositorio (spring). Ejecuta \`./mvnw -B verify\` antes de dar por buena la revisión. CI también ejecuta \`./gradlew build\`. Presta especial atención a los límites de transacción (@Transactional), la inyección de dependencias y la separación controller/service/repository. Busca también bugs: null-safety. Los tests viven en \`src/test/\`, \`src/test/java/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/java-testing.generated.md": "# Testing (Java)
 
-Escribe tests con junit para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con junit para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`./mvnw -B verify\` antes de terminar. Coloca los tests nuevos en \`src/test/\`, \`src/test/java/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -152,7 +152,7 @@ Proyecto Java con spring (maven wrapper).
 
 ### Convenciones
 - Sigue las convenciones de nombrado estándar de Java (PascalCase para clases, camelCase para métodos).
-- Ejecuta los tests con ./mvnw test antes de terminar una tarea.
+- Ejecuta los tests con ./mvnw -B verify antes de terminar una tarea.
 - No añadas dependencias nuevas sin declararlas en el gestor de build existente.
 
 ### Arquitectura
@@ -181,11 +181,11 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/java-review.generated.prompt.md": "# Code Review (Java)
 
-Revisa el diff actual buscando bugs, null-safety y desviaciones de las convenciones de spring. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Java de este repositorio (spring). Ejecuta \`./mvnw -B verify\` antes de dar por buena la revisión. CI también ejecuta \`./gradlew build\`. Presta especial atención a los límites de transacción (@Transactional), la inyección de dependencias y la separación controller/service/repository. Busca también bugs: null-safety. Los tests viven en \`src/test/\`, \`src/test/java/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/java-testing.generated.prompt.md": "# Testing (Java)
 
-Escribe tests con junit para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con junit para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`./mvnw -B verify\` antes de terminar. Coloca los tests nuevos en \`src/test/\`, \`src/test/java/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -197,7 +197,7 @@ Proyecto Java con spring (maven wrapper).
 
 ### Convenciones
 - Sigue las convenciones de nombrado estándar de Java (PascalCase para clases, camelCase para métodos).
-- Ejecuta los tests con ./mvnw test antes de terminar una tarea.
+- Ejecuta los tests con ./mvnw -B verify antes de terminar una tarea.
 - No añadas dependencias nuevas sin declararlas en el gestor de build existente.
 
 ### Arquitectura
@@ -230,7 +230,7 @@ Proyecto Java con spring (maven wrapper).
 
 ### Convenciones
 - Sigue las convenciones de nombrado estándar de Java (PascalCase para clases, camelCase para métodos).
-- Ejecuta los tests con ./mvnw test antes de terminar una tarea.
+- Ejecuta los tests con ./mvnw -B verify antes de terminar una tarea.
 - No añadas dependencias nuevas sin declararlas en el gestor de build existente.
 
 ### Arquitectura

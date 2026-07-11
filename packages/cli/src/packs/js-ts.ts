@@ -16,6 +16,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { canonicalOf } from "../core/canonical-commands.js";
 
 const FRAMEWORKS: Record<string, string> = {
   next: "next",
@@ -150,10 +151,6 @@ const TEXTS: Record<
     refactorExtra: "Respect the existing types.",
   },
 };
-
-function canonicalOf(ctx: PackContext | undefined, kind: CanonicalCommand["kind"]): CanonicalCommand | undefined {
-  return ctx?.facts.canonical.find((c) => c.kind === kind && c.confidence === "high");
-}
 
 const FRAMEWORK_RISKS: Record<string, Record<Lang, string>> = {
   express: {
