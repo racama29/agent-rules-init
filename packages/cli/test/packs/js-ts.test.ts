@@ -279,4 +279,28 @@ describe("jsTsPack", () => {
     const templates = jsTsPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
+
+  it("does not mention typing errors in the review prompt for plain JavaScript", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: {}, devDependencies: { mocha: "^10" }, scripts: {}, moduleType: "commonjs" },
+      })
+    )!;
+    expect(detection.usesTypeScript).toBe(false);
+    for (const lang of ["es", "en"] as const) {
+      const review = jsTsPack.promptTemplates(detection, lang).find((t) => t.id === "review")!;
+      expect(review.body).not.toMatch(/tipado|typing/i);
+    }
+  });
+
+  it("keeps typing errors in the review prompt for TypeScript projects", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: {}, devDependencies: { typescript: "^5" }, scripts: {}, moduleType: "module" },
+      })
+    )!;
+    expect(detection.usesTypeScript).toBe(true);
+    const review = jsTsPack.promptTemplates(detection, "en").find((t) => t.id === "review")!;
+    expect(review.body).toMatch(/typing/i);
+  });
 });

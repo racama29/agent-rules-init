@@ -123,7 +123,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
 
 const TEXTS: Record<
   Lang,
-  { tsStrict: string; esModules: string; commonJs: string; arch: string[]; reviewFocus: string; refactorExtra: string }
+  { tsStrict: string; esModules: string; commonJs: string; arch: string[]; reviewFocusTs: string; reviewFocusJs: string; refactorExtra: string }
 > = {
   es: {
     tsStrict: "Usa TypeScript estricto; evita `any` salvo justificación explícita.",
@@ -133,7 +133,8 @@ const TEXTS: Record<
       "Mantén los componentes/módulos pequeños y con una responsabilidad clara.",
       "Coloca los tests junto al código que prueban o en un directorio `test/` espejo, según lo que ya use el repo.",
     ],
-    reviewFocus: "errores de tipado, condiciones de carrera en async/await",
+    reviewFocusTs: "errores de tipado, condiciones de carrera en async/await",
+    reviewFocusJs: "condiciones de carrera en async/await",
     refactorExtra: "Respeta los tipos existentes.",
   },
   en: {
@@ -144,7 +145,8 @@ const TEXTS: Record<
       "Keep components/modules small and single-purpose.",
       "Place tests next to the code they cover or in a mirrored `test/` directory, following what the repo already uses.",
     ],
-    reviewFocus: "typing errors, async/await race conditions",
+    reviewFocusTs: "typing errors, async/await race conditions",
+    reviewFocusJs: "async/await race conditions",
     refactorExtra: "Respect the existing types.",
   },
 };
@@ -171,7 +173,7 @@ function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate
   const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    { id: "review", title: "Code Review (JS/TS)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "review", title: "Code Review (JS/TS)", body: reviewBody(lang, detection.usesTypeScript ? t.reviewFocusTs : t.reviewFocusJs, framework) },
     { id: "refactor", title: "Refactor (JS/TS)", body: refactorBody(lang, t.refactorExtra) },
     { id: "testing", title: "Testing (JS/TS)", body: testingBody(lang, runner) },
   ];

@@ -222,7 +222,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -278,7 +278,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -371,7 +371,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -427,7 +427,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -520,7 +520,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -564,7 +564,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -645,7 +645,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -689,7 +689,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -770,7 +770,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -801,7 +801,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, typing errors, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
+Review the current diff looking for bugs, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -856,7 +856,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -887,7 +887,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, errores de tipado, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
