@@ -27,6 +27,9 @@ function walk(rootPath: string): string[] {
     } catch {
       return;
     }
+    // Filesystem enumeration order is not guaranteed. Keep discovery stable so
+    // precedence-sensitive facts (for example, the first CI command) are reproducible.
+    entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
       if (entry.isDirectory()) {
         if (IGNORED_DIRS.has(entry.name)) continue;

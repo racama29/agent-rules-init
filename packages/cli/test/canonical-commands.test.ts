@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selectCanonicalCommands } from "../src/core/canonical-commands.js";
+import { canonicalOf, selectCanonicalCommands } from "../src/core/canonical-commands.js";
 import type { CiCommand, CommandEntry, RepoSignals } from "../src/core/types.js";
 
 function baseSignals(overrides: Partial<RepoSignals> = {}): RepoSignals {
@@ -41,6 +41,17 @@ describe("selectCanonicalCommands", () => {
     ]);
   });
 
+  it("recognizes Windows Java wrapper commands from CI", () => {
+    const ci: CiCommand[] = [
+      { command: ".\\mvnw.cmd -B verify", workflow: "windows.yml" },
+      { command: "gradlew.bat build", workflow: "windows.yml" },
+    ];
+    expect(selectCanonicalCommands(baseSignals(), [], ci)).toEqual([
+      { kind: "test", command: ".\\mvnw.cmd -B verify", source: "ci: windows.yml", confidence: "high", scope: "." },
+      { kind: "build", command: "gradlew.bat build", source: "ci: windows.yml", confidence: "high", scope: "." },
+    ]);
+  });
+
   it("prefers a manifest script over a CI command of the same kind", () => {
     const commands: CommandEntry[] = [{ source: "npm", invocation: "npm test", detail: "vitest run" }];
     const ci: CiCommand[] = [{ command: "npm test -- --coverage", workflow: "ci.yml" }];
@@ -56,6 +67,13 @@ describe("selectCanonicalCommands", () => {
       { kind: "test", command: "uv run pytest", source: "ci: tests.yml", confidence: "high", scope: "." },
     ]);
   });
+
+  it("recognizes uv options followed by tox run in CI", () => {
+    const command = "uv run --locked --no-default-groups --group dev tox run";
+    expect(selectCanonicalCommands(baseSignals(), [], [{ command, workflow: "tests.yml" }])).toEqual([
+      { kind: "test", command, source: "ci: tests.yml", confidence: "high", scope: "." },
+    ]);
+  });
 });
 
 describe("selectCanonicalCommands language fallbacks", () => {
@@ -66,6 +84,21 @@ describe("selectCanonicalCommands language fallbacks", () => {
     ]);
   });
 
+  it("uses native commands when only Windows Java wrappers exist", () => {
+    const maven = baseSignals({ pomXml: "<project/>", hasFile: (p) => p === "mvnw.cmd" });
+    expect(selectCanonicalCommands(maven, [], none)[0]).toMatchObject({
+      command: "mvnw.cmd test", source: "mvnw.cmd", confidence: "high",
+    });
+
+    const gradle = baseSignals({
+      buildGradle: "plugins { id 'java' }",
+      hasFile: (p) => p === "gradlew.bat",
+    });
+    expect(selectCanonicalCommands(gradle, [], none)[0]).toMatchObject({
+      command: "gradlew.bat test", source: "gradlew.bat", confidence: "high",
+    });
+  });
+
   it("uses plain mvn only when no wrapper exists", () => {
     const signals = baseSignals({ pomXml: "<project/>" });
     expect(selectCanonicalCommands(signals, [], none)[0]).toMatchObject({
@@ -73,13 +106,13 @@ describe("selectCanonicalCommands language fallbacks", () => {
     });
   });
 
-  it("prefers uv run pytest when uv.lock and pytest are present", () => {
+  it("keeps uv run pytest low-confidence when only the lock and a pytest mention are present", () => {
     const signals = baseSignals({
       pyprojectToml: '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["pytest"]\n',
       hasFile: (p) => p === "uv.lock",
     });
     expect(selectCanonicalCommands(signals, [], none)).toEqual([
-      { kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "high", scope: "." },
+      { kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "low", scope: "." },
     ]);
   });
 
@@ -104,14 +137,43 @@ describe("selectCanonicalCommands language fallbacks", () => {
     ]);
   });
 
-  it("prefers poetry run pytest when poetry.lock and pytest are present", () => {
+  it("keeps poetry run pytest low-confidence without an explicit script or CI command", () => {
     const signals = baseSignals({
       pyprojectToml: '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["pytest"]\n',
       hasFile: (p) => p === "poetry.lock",
     });
     expect(selectCanonicalCommands(signals, [], none)).toEqual([
-      { kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "high", scope: "." },
+      { kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "low", scope: "." },
     ]);
+  });
+
+  it("prefers the explicit tox configuration over an inferred uv pytest command", () => {
+    const signals = baseSignals({
+      pyprojectToml: '[project.optional-dependencies]\ndev = ["pytest"]\n',
+      toxIni: "[tox]\nenv_list = py311\n",
+      hasFile: (p) => p === "uv.lock",
+    });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "tox", source: "tox.ini", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("isolates canonical commands by stack family in a mixed repository", () => {
+    const signals = baseSignals({
+      packageJson: {
+        dependencies: {}, devDependencies: {}, scripts: { test: "vitest" }, moduleType: "module",
+      },
+      requirementsTxt: "pytest\n",
+    });
+    const commands: CommandEntry[] = [
+      { source: "npm", invocation: "npm test", detail: "vitest" },
+    ];
+    const facts = {
+      commands, omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
+      canonical: selectCanonicalCommands(signals, commands, []), testDirs: [], entrypoints: [],
+    };
+    expect(canonicalOf({ facts, signals }, "test", "js-ts")?.command).toBe("npm test");
+    expect(canonicalOf({ facts, signals }, "test", "python")).toBeUndefined();
   });
 
   it("attributes the low-confidence pytest fallback to requirements.txt when that's the source", () => {

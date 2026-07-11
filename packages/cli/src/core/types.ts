@@ -67,6 +67,8 @@ export interface DetectionResult {
   packageManager?: DetectionField<string>;
   testRunner?: DetectionField<string>;
   linter?: DetectionField<string>;
+  /** Framework implementado por el propio repositorio; no implica una dependencia. */
+  frameworkSource?: string;
   usesTypeScript?: boolean;
   moduleFormat?: "module" | "commonjs";
 }
@@ -125,6 +127,8 @@ export interface RepoFacts {
 
 export interface PackContext {
   facts: RepoFacts;
+  /** Señales del mismo alcance que facts; permite evitar canónicos de otro stack. */
+  signals?: RepoSignals;
 }
 
 export interface Pack {

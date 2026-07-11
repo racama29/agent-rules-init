@@ -69,12 +69,12 @@ function detect(signals: RepoSignals): DetectionResult | null {
   const hasAnyFileNamed = (name: string) =>
     signals.files.some((file) => file.split(/[\\/]/).pop() === name);
 
-  const isFrameworkSource = Boolean(
-    signals.packageJson.name && Object.prototype.hasOwnProperty.call(FRAMEWORKS, signals.packageJson.name)
-  );
+  const frameworkSource = signals.packageJson.name
+    ? FRAMEWORKS[signals.packageJson.name]
+    : undefined;
   const framework = detectFromDeps(allDeps, FRAMEWORKS) ?? {
     value: "none",
-    confidence: isFrameworkSource ? "high" as const : "low" as const,
+    confidence: frameworkSource ? "high" as const : "low" as const,
   };
   const testRunner = detectFromDeps(allDeps, TEST_RUNNERS) ?? {
     value: "unknown",
@@ -116,6 +116,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
     framework,
     testRunner,
     linter,
+    frameworkSource,
     packageManager,
     usesTypeScript,
     moduleFormat,
@@ -179,7 +180,7 @@ function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleS
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
-  const testCmd = canonicalOf(ctx, "test")?.command ?? runner;
+  const testCmd = canonicalOf(ctx, "test", "js-ts")?.command ?? runner;
   const conventions: string[] = [];
   if (detection.usesTypeScript) conventions.push(t.tsStrict);
   conventions.push(runTestsConvention(lang, testCmd));
@@ -198,8 +199,8 @@ function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackConte
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   const focus = detection.usesTypeScript ? t.reviewFocusTs : t.reviewFocusJs;
-  const test = canonicalOf(ctx, "test");
-  const lint = canonicalOf(ctx, "lint");
+  const test = canonicalOf(ctx, "test", "js-ts");
+  const lint = canonicalOf(ctx, "lint", "js-ts");
   const testDirs = ctx?.facts.testDirs ?? [];
 
   const es = lang === "es";
@@ -215,7 +216,7 @@ function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackConte
     const list = commands.map((c) => `\`${c.command}\``).join(es ? " y " : " and ");
     reviewParts.push(es ? `Ejecuta ${list} antes de dar por buena la revisión.` : `Run ${list} before approving the review.`);
   }
-  const risk = framework ? FRAMEWORK_RISKS[framework]?.[lang] : undefined;
+  const risk = FRAMEWORK_RISKS[framework ?? detection.frameworkSource ?? ""]?.[lang];
   if (risk) reviewParts.push(risk);
   reviewParts.push(es ? `Busca también bugs: ${focus}.` : `Also look for bugs: ${focus}.`);
   if (testDirs.length > 0) {

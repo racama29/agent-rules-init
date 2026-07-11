@@ -39,7 +39,20 @@ describe("pythonPack", () => {
     const flaskOwnPyproject = `[project]\nname = "flask"\ndependencies = [\n    "blinker>=1.9.0",\n    "click>=8.1.3",\n    "werkzeug>=3.1.0",\n]\n\n[dependency-groups]\ndev = [\n    "pytest",\n    "ruff",\n]\n`;
     const detection = pythonPack.detect(baseSignals({ pyprojectToml: flaskOwnPyproject }));
     expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
+    expect(detection?.frameworkSource).toBe("flask");
     expect(detection?.testRunner).toEqual({ value: "pytest", confidence: "high" });
+  });
+
+  it("keeps Flask-specific review risks for Flask's own source repo", () => {
+    const detection = pythonPack.detect(baseSignals({
+      pyprojectToml: '[project]\nname = "Flask"\ndependencies = ["werkzeug"]\n',
+    }))!;
+    const review = pythonPack.promptTemplates(detection, "en", {
+      facts: { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
+        canonical: [], testDirs: ["tests/"], entrypoints: [] },
+    }).find((template) => template.id === "review")!;
+    expect(review.body).toContain("application/request context");
+    expect(review.body).not.toContain("using flask");
   });
 
   it("detects uv from uv.lock", () => {
@@ -87,10 +100,10 @@ function flaskLikeSignalsAndDetection() {
 }
 
 describe("enriched python prompts", () => {
-  it("review prompt cites the uv-based flow and real paths", () => {
+  it("review prompt cites the explicit tox flow and real paths", () => {
     const { detection, ctx } = flaskLikeSignalsAndDetection();
     const review = pythonPack.promptTemplates(detection, "en", ctx).find((t) => t.id === "review")!;
-    expect(review.body).toContain("`uv run pytest`");
+    expect(review.body).toContain("`tox`");
     expect(review.body).toContain("`tests/`");
     expect(review.body).toMatch(/tox/);
   });
@@ -98,7 +111,7 @@ describe("enriched python prompts", () => {
   it("rules recommend the canonical command, not just the runner name", () => {
     const { detection, ctx } = flaskLikeSignalsAndDetection();
     const ruleSet = pythonPack.rules(detection, "en", ctx);
-    expect(ruleSet.conventions.join("\n")).toContain("uv run pytest");
+    expect(ruleSet.conventions.join("\n")).toContain("Run the tests with tox");
     expect(ruleSet.conventions.join("\n")).not.toMatch(/with pytest before/);
   });
 

@@ -57,10 +57,10 @@ function extractPyprojectDependencySections(pyproject: string): string {
   return sections.length > 0 ? sections.join("\n") : pyproject;
 }
 
-function isFrameworkSourceProject(pyproject: string): boolean {
+function frameworkSourceProject(pyproject: string): string | undefined {
   const projectBlock = pyproject.match(/(?:^|\n)\[project\]([\s\S]*?)(?:\n\[|$)/)?.[1];
   const name = projectBlock?.match(/(?:^|\n)\s*name\s*=\s*["']([^"']+)["']/i)?.[1].toLowerCase();
-  return FRAMEWORKS.some(([framework]) => framework === name);
+  return FRAMEWORKS.find(([framework]) => framework === name)?.[1];
 }
 
 function detect(signals: RepoSignals): DetectionResult | null {
@@ -69,9 +69,12 @@ function detect(signals: RepoSignals): DetectionResult | null {
 
   const searchText = signals.pyprojectToml ? extractPyprojectDependencySections(signals.pyprojectToml) : source;
 
+  const frameworkSource = signals.pyprojectToml
+    ? frameworkSourceProject(signals.pyprojectToml)
+    : undefined;
   const framework = findIn(searchText, FRAMEWORKS) ?? {
     value: "none",
-    confidence: signals.pyprojectToml && isFrameworkSourceProject(signals.pyprojectToml)
+    confidence: frameworkSource
       ? "high" as const
       : "low" as const,
   };
@@ -86,7 +89,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
     ? { value: "pip (pyproject.toml)", confidence: "low" }
     : { value: "pip", confidence: "low" };
 
-  return { packId: "python", language: "Python", framework, testRunner, packageManager };
+  return { packId: "python", language: "Python", framework, frameworkSource, testRunner, packageManager };
 }
 
 const TEXTS: Record<Lang, { style: string; deps: string; arch: string[]; reviewFocus: string; refactorExtra: string }> = {
@@ -131,7 +134,7 @@ function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleS
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
-  const testCmd = canonicalOf(ctx, "test")?.command ?? runner;
+  const testCmd = canonicalOf(ctx, "test", "python")?.command ?? runner;
   return {
     summary: summarySentence(lang, "Python", framework),
     conventions: [t.style, runTestsConvention(lang, testCmd), t.deps],
@@ -143,7 +146,7 @@ function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackConte
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
-  const test = canonicalOf(ctx, "test");
+  const test = canonicalOf(ctx, "test", "python");
   const testDirs = ctx?.facts.testDirs ?? [];
   const hasTox = ctx?.facts.commands.some((c) => c.source === "tox") ?? false;
   const es = lang === "es";
@@ -160,7 +163,7 @@ function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackConte
   if (hasTox) {
     reviewParts.push(es ? "La matriz completa de entornos se ejecuta con tox (`tox.ini`)." : "The full environment matrix runs through tox (`tox.ini`).");
   }
-  const risk = framework ? FRAMEWORK_RISKS[framework]?.[lang] : undefined;
+  const risk = FRAMEWORK_RISKS[framework ?? detection.frameworkSource ?? ""]?.[lang];
   if (risk) reviewParts.push(risk);
   reviewParts.push(es ? `Busca también bugs: ${t.reviewFocus}.` : `Also look for bugs: ${t.reviewFocus}.`);
   if (testDirs.length > 0) {

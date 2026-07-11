@@ -24,6 +24,24 @@ describe("jsTsPack", () => {
       })
     );
     expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
+    expect(detection?.frameworkSource).toBe("express");
+  });
+
+  it("keeps framework-specific review risks for the framework's own source repo", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: {
+          name: "express", dependencies: {}, devDependencies: { mocha: "^11" },
+          scripts: {}, moduleType: "commonjs",
+        },
+      })
+    )!;
+    const review = jsTsPack.promptTemplates(detection, "en", {
+      facts: { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
+        canonical: [], testDirs: ["test/"], entrypoints: [] },
+    }).find((template) => template.id === "review")!;
+    expect(review.body).toContain("next(err)");
+    expect(review.body).not.toContain("using express");
   });
   it("returns null when there is no package.json", () => {
     expect(jsTsPack.detect(baseSignals({}))).toBeNull();

@@ -64,12 +64,14 @@ const CI_PATTERNS: [RegExp, CanonicalCommand["kind"]][] = [
   [/^(?:npm|pnpm|yarn|bun) run build\b/, "build"],
   [/^(?:npm|pnpm|yarn|bun) run (?:format|fmt)\b/, "format"],
   [/^(?:npm|pnpm|yarn|bun) run (?:typecheck|type-check)\b/, "typecheck"],
-  [/^\.[\\/]mvnw\b.*\b(?:verify|test)\b/, "test"],
-  [/^\.[\\/]mvnw\b.*\bpackage\b/, "build"],
-  [/^\.[\\/]gradlew\b.*\b(?:check|test)\b/, "test"],
-  [/^\.[\\/]gradlew\b.*\b(?:build|assemble)\b/, "build"],
-  [/^(?:uv run |poetry run )?pytest\b/, "test"],
-  [/^tox\b/, "test"],
+  [/^(?:\.[\\/])?mvnw(?:\.cmd)?\b.*\b(?:verify|test)\b/, "test"],
+  [/^(?:\.[\\/])?mvnw(?:\.cmd)?\b.*\bpackage\b/, "build"],
+  [/^(?:\.[\\/])?gradlew(?:\.bat)?\b.*\b(?:check|test)\b/, "test"],
+  [/^(?:\.[\\/])?gradlew(?:\.bat)?\b.*\b(?:build|assemble)\b/, "build"],
+  [/^uv run\b.*\b(?:pytest|tox(?:\s+run)?)\b/, "test"],
+  [/^poetry run\b.*\b(?:pytest|tox)\b/, "test"],
+  [/^pytest\b/, "test"],
+  [/^tox(?:\s+run)?\b/, "test"],
   [/^cargo test\b/, "test"],
   [/^go test\b/, "test"],
 ];
@@ -97,20 +99,24 @@ function fromSignals(signals: RepoSignals): CanonicalCommand[] {
   const out: CanonicalCommand[] = [];
 
   if (signals.pomXml) {
-    const hasWrapper = signals.hasFile("mvnw") || signals.hasFile("mvnw.cmd");
+    const unixWrapper = signals.hasFile("mvnw");
+    const windowsWrapper = !unixWrapper && signals.hasFile("mvnw.cmd");
+    const hasWrapper = unixWrapper || windowsWrapper;
     out.push({
       kind: "test",
-      command: hasWrapper ? "./mvnw test" : "mvn test",
-      source: hasWrapper ? "mvnw" : "pom.xml",
+      command: unixWrapper ? "./mvnw test" : windowsWrapper ? "mvnw.cmd test" : "mvn test",
+      source: unixWrapper ? "mvnw" : windowsWrapper ? "mvnw.cmd" : "pom.xml",
       confidence: hasWrapper ? "high" : "low",
       scope: ".",
     });
   } else if (signals.buildGradle) {
-    const hasWrapper = signals.hasFile("gradlew") || signals.hasFile("gradlew.bat");
+    const unixWrapper = signals.hasFile("gradlew");
+    const windowsWrapper = !unixWrapper && signals.hasFile("gradlew.bat");
+    const hasWrapper = unixWrapper || windowsWrapper;
     out.push({
       kind: "test",
-      command: hasWrapper ? "./gradlew test" : "gradle test",
-      source: hasWrapper ? "gradlew" : "build.gradle",
+      command: unixWrapper ? "./gradlew test" : windowsWrapper ? "gradlew.bat test" : "gradle test",
+      source: unixWrapper ? "gradlew" : windowsWrapper ? "gradlew.bat" : "build.gradle",
       confidence: hasWrapper ? "high" : "low",
       scope: ".",
     });
@@ -118,12 +124,13 @@ function fromSignals(signals: RepoSignals): CanonicalCommand[] {
 
   const pythonManifest = signals.pyprojectToml ?? signals.requirementsTxt ?? signals.environmentYml;
   const hasPytest = pythonManifest !== undefined && /\bpytest\b/i.test(pythonManifest);
-  if (hasPytest && signals.hasFile("uv.lock")) {
-    out.push({ kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "high", scope: "." });
-  } else if (hasPytest && signals.hasFile("poetry.lock")) {
-    out.push({ kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "high", scope: "." });
-  } else if (signals.toxIni) {
+  if (signals.toxIni) {
     out.push({ kind: "test", command: "tox", source: "tox.ini", confidence: "high", scope: "." });
+  } else if (hasPytest && signals.hasFile("uv.lock")) {
+    // El lock demuestra el gestor, no que pytest pertenezca a un grupo instalado por defecto.
+    out.push({ kind: "test", command: "uv run pytest", source: "uv.lock", confidence: "low", scope: "." });
+  } else if (hasPytest && signals.hasFile("poetry.lock")) {
+    out.push({ kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "low", scope: "." });
   } else if (hasPytest) {
     const source = signals.pyprojectToml
       ? "pyproject.toml"
@@ -150,7 +157,40 @@ export function selectCanonicalCommands(
 
 export function canonicalOf(
   ctx: PackContext | undefined,
-  kind: CanonicalCommand["kind"]
+  kind: CanonicalCommand["kind"],
+  family?: "js-ts" | "python" | "java"
 ): CanonicalCommand | undefined {
+  if (family && ctx?.signals) {
+    return selectCanonicalForFamily({ ...ctx, signals: ctx.signals }, family).find(
+      (c) => c.kind === kind && c.confidence === "high"
+    );
+  }
   return ctx?.facts.canonical.find((c) => c.kind === kind && c.confidence === "high");
+}
+
+function selectCanonicalForFamily(
+  ctx: PackContext & { signals: RepoSignals },
+  family: "js-ts" | "python" | "java"
+): CanonicalCommand[] {
+  const jsSources = new Set<CommandSource>(["npm", "pnpm", "yarn", "bun"]);
+  const commands = ctx.facts.commands.filter((command) =>
+    family === "js-ts" ? jsSources.has(command.source) : family === "python" ? command.source === "tox" : false
+  );
+  const ciCommands = ctx.facts.ciCommands.filter(({ command }) => {
+    if (family === "js-ts") return /^(?:npm|pnpm|yarn|bun)\b/.test(command);
+    if (family === "python") return /^(?:uv|poetry|pytest|tox)\b/.test(command);
+    return /^(?:\.[\\/])?(?:mvnw(?:\.cmd)?|gradlew(?:\.bat)?)\b|^(?:mvn|gradle)\b/.test(command);
+  });
+  const signals: RepoSignals = {
+    ...ctx.signals,
+    packageJson: family === "js-ts" ? ctx.signals.packageJson : undefined,
+    packageJsons: family === "js-ts" ? ctx.signals.packageJsons : undefined,
+    pyprojectToml: family === "python" ? ctx.signals.pyprojectToml : undefined,
+    requirementsTxt: family === "python" ? ctx.signals.requirementsTxt : undefined,
+    environmentYml: family === "python" ? ctx.signals.environmentYml : undefined,
+    toxIni: family === "python" ? ctx.signals.toxIni : undefined,
+    pomXml: family === "java" ? ctx.signals.pomXml : undefined,
+    buildGradle: family === "java" ? ctx.signals.buildGradle : undefined,
+  };
+  return selectCanonicalCommands(signals, commands, ciCommands);
 }

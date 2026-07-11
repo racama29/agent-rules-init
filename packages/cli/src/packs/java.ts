@@ -86,7 +86,7 @@ function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleS
     : detection.packageManager?.value === "gradle wrapper"
     ? "./gradlew test"
     : "gradle test";
-  const testCmd = canonicalOf(ctx, "test")?.command ?? wrapperCmd;
+  const testCmd = canonicalOf(ctx, "test", "java")?.command ?? wrapperCmd;
   return {
     summary: summarySentence(lang, "Java", framework, detection.packageManager?.value),
     conventions: [t.naming, runTestsConvention(lang, testCmd), t.deps],
@@ -98,8 +98,8 @@ function promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackConte
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
-  const test = canonicalOf(ctx, "test");
-  const build = canonicalOf(ctx, "build");
+  const test = canonicalOf(ctx, "test", "java");
+  const build = canonicalOf(ctx, "build", "java");
   const testDirs = ctx?.facts.testDirs ?? [];
   const es = lang === "es";
 

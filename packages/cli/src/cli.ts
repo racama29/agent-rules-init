@@ -98,7 +98,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const detections = applyAnswers(rawDetections, answers);
   const facts = buildRepoFacts(signals, lang);
   options.onFacts?.(facts);
-  const ctx = { facts };
+  const ctx = { facts, signals };
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
