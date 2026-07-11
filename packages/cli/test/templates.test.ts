@@ -30,10 +30,13 @@ const facts: RepoFacts = {
   ciCommands: [{ command: "npm ci", workflow: "ci.yml" }],
   omittedCiCount: 0,
   canonical: [],
+  testDirs: [],
+  entrypoints: [],
 };
 
 const emptyFacts: RepoFacts = {
   commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [],
+  testDirs: [], entrypoints: [],
 };
 
 describe("templates", () => {
@@ -114,6 +117,7 @@ describe("templates", () => {
   it("renders a canonical commands section with provenance, high confidence only", () => {
     const facts: RepoFacts = {
       commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
+      testDirs: [], entrypoints: [],
       canonical: [
         { kind: "test", command: "npm test", source: "package.json", confidence: "high", scope: "." },
         { kind: "build", command: "gradle build", source: "build.gradle", confidence: "low", scope: "." },

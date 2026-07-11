@@ -224,6 +224,39 @@ export function extractStructure(signals: RepoSignals, lang: Lang): DirEntry[] {
     });
 }
 
+const TEST_DIR_NAMES = new Set(["test", "tests", "spec", "specs", "__tests__"]);
+
+export function detectTestDirs(files: string[]): string[] {
+  const dirs = new Set<string>();
+  for (const file of files) {
+    const segments = file.split(/[\\/]/).slice(0, -1);
+    for (let i = 0; i < segments.length; i++) {
+      if (TEST_DIR_NAMES.has(segments[i].toLowerCase())) {
+        dirs.add(segments.slice(0, i + 1).join("/") + "/");
+        // También el subdirectorio inmediato (test/acceptance/, src/test/java/),
+        // pero no más profundo.
+        if (segments.length > i + 1) dirs.add(segments.slice(0, i + 2).join("/") + "/");
+        break;
+      }
+    }
+  }
+  return [...dirs].sort();
+}
+
+export function detectEntrypoints(signals: RepoSignals): RepoFacts["entrypoints"] {
+  const out: RepoFacts["entrypoints"] = [];
+  if (signals.packageJson?.main) {
+    out.push({ label: "main", target: signals.packageJson.main, source: "package.json" });
+  }
+  const scriptsSection = signals.pyprojectToml?.match(/\[project\.scripts\]([\s\S]*?)(?:\n\[|$)/)?.[1];
+  if (scriptsSection) {
+    for (const match of scriptsSection.matchAll(/^\s*([\w.-]+)\s*=\s*["']([^"']+)["']/gm)) {
+      out.push({ label: match[1], target: match[2], source: "pyproject.toml" });
+    }
+  }
+  return out;
+}
+
 export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
   const allCommands = [
     ...extractJsPackageCommands(signals),
@@ -241,5 +274,7 @@ export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
     ciCommands,
     omittedCiCount,
     canonical: selectCanonicalCommands(signals, kept, ciCommands),
+    testDirs: detectTestDirs(signals.files),
+    entrypoints: detectEntrypoints(signals),
   };
 }

@@ -46,8 +46,14 @@ export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
     for (const o of facts.omittedCommands) lines.push(`- ${ui.andMore(o.count, SOURCE_FILES[o.source])}`);
     sections.push([`## ${ui.sections.commands}`, "", ...lines].join("\n"));
   }
-  if (facts.structure.length > 0) {
+  if (facts.structure.length > 0 || facts.testDirs.length > 0 || facts.entrypoints.length > 0) {
     const lines = facts.structure.map((d) => (d.note ? `- \`${d.dir}\` — ${d.note}` : `- \`${d.dir}\``));
+    for (const dir of facts.testDirs) {
+      if (!facts.structure.some((d) => d.dir === dir)) lines.push(`- \`${dir}\` — ${ui.testDirNote}`);
+    }
+    for (const entry of facts.entrypoints) {
+      lines.push(`- ${ui.entrypointNote}: \`${entry.target}\` (${entry.source} "${entry.label}")`);
+    }
     sections.push([`## ${ui.sections.structure}`, "", ...lines].join("\n"));
   }
   if (facts.ciCommands.length > 0) {

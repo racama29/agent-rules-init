@@ -40,6 +40,8 @@ Java project using spring (maven wrapper).
 
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## What CI runs (GitHub Actions)
 
@@ -83,6 +85,8 @@ Java project using spring (maven wrapper).
 
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## What CI runs (GitHub Actions)
 
@@ -114,6 +118,8 @@ Java project using spring (maven wrapper).
 
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## What CI runs (GitHub Actions)
 
@@ -162,6 +168,8 @@ Proyecto Java con spring (maven wrapper).
 
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -205,6 +213,8 @@ Proyecto Java con spring (maven wrapper).
 
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -236,6 +246,8 @@ Proyecto Java con spring (maven wrapper).
 
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
+- \`src/test/\` — tests
+- \`src/test/java/\` — tests
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -587,6 +599,8 @@ JavaScript project using express.
 - \`.github/\` — GitHub workflows and configuration
 - \`lib/\` — source code
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- entry point: \`lib/app.js\` (package.json "main")
 
 ## What CI runs (GitHub Actions)
 
@@ -636,6 +650,8 @@ JavaScript project using express.
 - \`.github/\` — GitHub workflows and configuration
 - \`lib/\` — source code
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- entry point: \`lib/app.js\` (package.json "main")
 
 ## What CI runs (GitHub Actions)
 
@@ -673,6 +689,8 @@ JavaScript project using express.
 - \`.github/\` — GitHub workflows and configuration
 - \`lib/\` — source code
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- entry point: \`lib/app.js\` (package.json "main")
 
 ## What CI runs (GitHub Actions)
 
@@ -727,6 +745,8 @@ Proyecto JavaScript con express.
 - \`.github/\` — workflows y configuración de GitHub
 - \`lib/\` — código fuente
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- punto de entrada: \`lib/app.js\` (package.json "main")
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -776,6 +796,8 @@ Proyecto JavaScript con express.
 - \`.github/\` — workflows y configuración de GitHub
 - \`lib/\` — código fuente
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- punto de entrada: \`lib/app.js\` (package.json "main")
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -813,6 +835,8 @@ Proyecto JavaScript con express.
 - \`.github/\` — workflows y configuración de GitHub
 - \`lib/\` — código fuente
 - \`test/\` — tests
+- \`test/acceptance/\` — tests
+- punto de entrada: \`lib/app.js\` (package.json "main")
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -1365,6 +1389,7 @@ Python project using flask.
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
 - \`tests/\` — tests
+- entry point: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## What CI runs (GitHub Actions)
 
@@ -1412,6 +1437,7 @@ Python project using flask.
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
 - \`tests/\` — tests
+- entry point: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## What CI runs (GitHub Actions)
 
@@ -1447,6 +1473,7 @@ Python project using flask.
 - \`.github/\` — GitHub workflows and configuration
 - \`src/\` — source code
 - \`tests/\` — tests
+- entry point: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## What CI runs (GitHub Actions)
 
@@ -1499,6 +1526,7 @@ Proyecto Python con flask.
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
 - \`tests/\` — tests
+- punto de entrada: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -1546,6 +1574,7 @@ Proyecto Python con flask.
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
 - \`tests/\` — tests
+- punto de entrada: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## Lo que ejecuta CI (GitHub Actions)
 
@@ -1581,6 +1610,7 @@ Proyecto Python con flask.
 - \`.github/\` — workflows y configuración de GitHub
 - \`src/\` — código fuente
 - \`tests/\` — tests
+- punto de entrada: \`fixture_app.cli:main\` (pyproject.toml "fixture-app")
 
 ## Lo que ejecuta CI (GitHub Actions)
 

@@ -63,6 +63,7 @@ function toPackageJsonManifest(
   return {
     path: relativePath.split(path.sep).join("/"),
     name: raw.name as string | undefined,
+    main: typeof raw.main === "string" ? raw.main : undefined,
     dependencies: (raw.dependencies as Record<string, string>) ?? {},
     devDependencies: (raw.devDependencies as Record<string, string>) ?? {},
     scripts: (raw.scripts as Record<string, string>) ?? {},
@@ -230,6 +231,7 @@ export function scanRepo(rootPath: string): RepoSignals {
         scripts: primaryPackageJson.scripts,
         moduleType: primaryPackageJson.moduleType,
         packageManager: primaryPackageJson.packageManager,
+        main: primaryPackageJson.main,
       }
     : undefined;
 

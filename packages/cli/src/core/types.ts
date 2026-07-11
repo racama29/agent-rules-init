@@ -4,6 +4,7 @@ export type JsPackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
 export interface PackageJsonManifest {
   name?: string;
+  main?: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   scripts: Record<string, string>;
@@ -118,6 +119,8 @@ export interface RepoFacts {
   ciCommands: CiCommand[];
   omittedCiCount: number;
   canonical: CanonicalCommand[];
+  testDirs: string[];
+  entrypoints: { label: string; target: string; source: string }[];
 }
 
 export interface Pack {

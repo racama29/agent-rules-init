@@ -10,6 +10,8 @@ import {
   extractStructure,
   extractCiCommands,
   buildRepoFacts,
+  detectTestDirs,
+  detectEntrypoints,
 } from "../src/core/repo-facts.js";
 import type { CommandEntry, RepoSignals } from "../src/core/types.js";
 
@@ -289,6 +291,49 @@ describe("extractStructure", () => {
   });
 });
 
+describe("detectTestDirs", () => {
+  it("finds top-level test dirs and their first-level children", () => {
+    expect(detectTestDirs([
+      "lib/app.js",
+      "test/app.test.js",
+      "test/acceptance/routes.test.js",
+    ])).toEqual(["test/", "test/acceptance/"]);
+  });
+
+  it("finds the Maven test layout", () => {
+    expect(detectTestDirs([
+      "src/main/java/demo/App.java",
+      "src/test/java/demo/AppTest.java",
+    ])).toEqual(["src/test/", "src/test/java/"]);
+  });
+
+  it("returns nothing when no test dir exists", () => {
+    expect(detectTestDirs(["lib/app.js", "README.md"])).toEqual([]);
+  });
+});
+
+describe("detectEntrypoints", () => {
+  it("reads package.json main", () => {
+    const signals = baseSignals({
+      packageJson: {
+        main: "lib/app.js", dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs",
+      },
+    });
+    expect(detectEntrypoints(signals)).toEqual([
+      { label: "main", target: "lib/app.js", source: "package.json" },
+    ]);
+  });
+
+  it("reads pyproject [project.scripts]", () => {
+    const signals = baseSignals({
+      pyprojectToml: '[project]\nname = "x"\n\n[project.scripts]\nfixture-app = "fixture_app.cli:main"\n',
+    });
+    expect(detectEntrypoints(signals)).toEqual([
+      { label: "fixture-app", target: "fixture_app.cli:main", source: "pyproject.toml" },
+    ]);
+  });
+});
+
 describe("buildRepoFacts", () => {
   it("assembles commands from every source plus structure and CI", () => {
     const facts = buildRepoFacts(
@@ -317,7 +362,10 @@ describe("buildRepoFacts", () => {
 
   it("returns fully empty facts for an empty repo", () => {
     const facts = buildRepoFacts(baseSignals({}), "es");
-    expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [] });
+    expect(facts).toEqual({
+      commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [],
+      testDirs: [], entrypoints: [],
+    });
   });
 
   it("fills canonical commands from the extracted scripts", () => {
