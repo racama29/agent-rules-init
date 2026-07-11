@@ -25,6 +25,7 @@ describe("jsTsPack", () => {
     );
     expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
     expect(detection?.frameworkSource).toBe("express");
+    expect(jsTsPack.rules(detection!, "en").summary).toBe("JavaScript repository implementing express.");
   });
 
   it("keeps framework-specific review risks for the framework's own source repo", () => {
@@ -38,7 +39,7 @@ describe("jsTsPack", () => {
     )!;
     const review = jsTsPack.promptTemplates(detection, "en", {
       facts: { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
-        canonical: [], testDirs: ["test/"], entrypoints: [] },
+        canonical: [], testDirs: ["test/"], entrypoints: [], architectureFacts: [], conventionFacts: [] },
     }).find((template) => template.id === "review")!;
     expect(review.body).toContain("next(err)");
     expect(review.body).not.toContain("using express");

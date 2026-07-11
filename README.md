@@ -29,6 +29,10 @@ Besides per-stack advice, the generated files include **facts extracted from you
 - **Workspace-aware detection** — nested JS/TS packages get path-scoped rules and executable commands for npm, pnpm, Yarn or Bun.
 - **Structure** — top-level directories, annotated only when their meaning is unambiguous.
 - **What CI runs** — the `run:` steps from your `.github/workflows/*.yml` (read locally; the CLI never touches the network).
+- **Observed architecture** — declared entrypoints, test placement, source roots, workspaces and layered layouts, each with file evidence.
+- **Verified local conventions** — conservative rules from `.editorconfig`, strict TypeScript settings, Ruff/Black line length and explicit `CONTRIBUTING.md` directives.
+
+The general documents are tailored to their consumer: `CLAUDE.md` keeps repository context and the complete fact catalog, `AGENTS.md` emphasizes operational rules and canonical validation commands, and Copilot instructions stay concise and code-oriented without copying CI or terminal catalogs.
 
 If something cannot be inferred with confidence (e.g. the framework), the CLI asks you one targeted question before generating the files.
 

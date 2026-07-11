@@ -100,6 +100,42 @@ describe("scanRepo", () => {
     }
   });
 
+  it("captures selected guidance files with normalized paths and content", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-guidance-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, ".editorconfig"), "[*]\nindent_size = 2\n");
+      fs.mkdirSync(path.join(tmpDir, "packages", "web"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "packages", "web", "tsconfig.json"), '{"compilerOptions":{"strict":true}}');
+      const guidance = scanRepo(tmpDir).guidanceFiles;
+      expect(guidance).toContainEqual({ path: ".editorconfig", content: "[*]\nindent_size = 2\n" });
+      expect(guidance).toContainEqual({
+        path: "packages/web/tsconfig.json", content: '{"compilerOptions":{"strict":true}}',
+      });
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not treat fixture and documentation manifests as root project stacks", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-aux-manifests-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ scripts: { test: "vitest" } }));
+      fs.mkdirSync(path.join(tmpDir, "fixtures", "java"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "fixtures", "java", "pom.xml"), "<project><artifactId>noise</artifactId></project>");
+      fs.mkdirSync(path.join(tmpDir, "docs", "python"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "docs", "python", "tox.ini"), "[tox]\nenvlist = py311\n");
+      fs.mkdirSync(path.join(tmpDir, "examples", "rust"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "examples", "rust", "Cargo.toml"), "[package]\nname='noise'\n");
+      const signals = scanRepo(tmpDir);
+      expect(signals.packageJson).toBeDefined();
+      expect(signals.pomXml).toBeUndefined();
+      expect(signals.toxIni).toBeUndefined();
+      expect(signals.cargoToml).toBeUndefined();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   describe("with CI workflows, tox.ini and composer scripts", () => {
     let tmpDir: string;
 

@@ -78,4 +78,25 @@ describe("content quality gates", () => {
       expect(content).not.toMatch(/TypeScript/);
     }
   });
+
+  it("produces consumer-specific documents instead of title-only variants", async () => {
+    const files = await renderCorpus("node-express-mocha", "en");
+    const claude = files.get("CLAUDE.generated.md")!;
+    const agents = files.get("AGENTS.generated.md")!;
+    const copilot = files.get(".github/copilot-instructions.generated.md")!;
+    expect(new Set([claude, agents, copilot])).toHaveLength(3);
+    expect(claude).toContain("What CI runs");
+    expect(agents).toContain("Operational rules");
+    expect(copilot).not.toContain("What CI runs");
+    expect(copilot).not.toContain("Repo commands");
+  });
+
+  it("renders observed facts and local conventions with evidence", async () => {
+    const express = await renderCorpus("node-express-mocha", "en");
+    const flask = await renderCorpus("python-uv-tox", "en");
+    expect(express.get("CLAUDE.generated.md")).toContain("evidence: `.editorconfig`");
+    expect(express.get("CLAUDE.generated.md")).toContain("Primary source code lives under lib/");
+    expect(flask.get("CLAUDE.generated.md")).toContain("ruff configures a maximum line length of 100");
+    expect(flask.get("CLAUDE.generated.md")).toContain("evidence: `pyproject.toml`");
+  });
 });

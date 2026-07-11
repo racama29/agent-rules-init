@@ -4,8 +4,10 @@ import { UI, type Lang } from "./i18n.js";
 import { selectCanonicalCommands } from "./canonical-commands.js";
 import type {
   CiCommand,
+  ArchitectureFact,
   CommandEntry,
   CommandSource,
+  ConventionFact,
   DirEntry,
   JsPackageManager,
   RepoFacts,
@@ -225,6 +227,15 @@ export function extractStructure(signals: RepoSignals, lang: Lang): DirEntry[] {
 }
 
 const TEST_DIR_NAMES = new Set(["test", "tests", "spec", "specs", "__tests__"]);
+const MEANINGFUL_TEST_CHILDREN = new Set(["acceptance", "integration", "unit", "e2e"]);
+const AUXILIARY_FACT_DIRS = new Set([
+  "docs", "doc", "tools", "tool", "scripts", "script", "examples", "example",
+  "benchmark", "benchmarks", "fixture", "fixtures",
+]);
+
+function isAuxiliaryFactPath(file: string): boolean {
+  return file.split(/[\\/]/).some((segment) => AUXILIARY_FACT_DIRS.has(segment.toLowerCase()));
+}
 
 export function detectTestDirs(files: string[]): string[] {
   const dirs = new Set<string>();
@@ -233,9 +244,13 @@ export function detectTestDirs(files: string[]): string[] {
     for (let i = 0; i < segments.length; i++) {
       if (TEST_DIR_NAMES.has(segments[i].toLowerCase())) {
         dirs.add(segments.slice(0, i + 1).join("/") + "/");
-        // También el subdirectorio inmediato (test/acceptance/, src/test/java/),
-        // pero no más profundo.
-        if (segments.length > i + 1) dirs.add(segments.slice(0, i + 2).join("/") + "/");
+        // Solo conserva sublayouts inequívocos. Directorios como tests/static o
+        // tests/templates suelen ser fixtures, no ubicaciones independientes de tests.
+        const child = segments[i + 1]?.toLowerCase();
+        const languageLayout = segments[0]?.toLowerCase() === "src" && segments[1]?.toLowerCase() === "test";
+        if (child && (languageLayout || MEANINGFUL_TEST_CHILDREN.has(child))) {
+          dirs.add(segments.slice(0, i + 2).join("/") + "/");
+        }
         break;
       }
     }
@@ -257,6 +272,161 @@ export function detectEntrypoints(signals: RepoSignals): RepoFacts["entrypoints"
   return out;
 }
 
+function evidencePath(file: string): string {
+  return file.split(path.sep).join("/");
+}
+
+export function extractArchitectureFacts(
+  signals: RepoSignals,
+  lang: Lang,
+  testDirs = detectTestDirs(signals.files.filter((file) => !isAuxiliaryFactPath(file))),
+  entrypoints = detectEntrypoints(signals)
+): ArchitectureFact[] {
+  const facts: ArchitectureFact[] = [];
+  const normalized = signals.files.filter((file) => !isAuxiliaryFactPath(file)).map(evidencePath);
+  const add = (fact: Omit<ArchitectureFact, "scope" | "confidence">) =>
+    facts.push({ ...fact, scope: ".", confidence: "high" });
+
+  if (entrypoints.length > 0) {
+    const rendered = entrypoints.map((entry) => `${entry.label} -> ${entry.target}`).join(", ");
+    add({
+      kind: "entrypoint",
+      statement: lang === "es" ? `Puntos de entrada declarados: ${rendered}.` : `Declared entry points: ${rendered}.`,
+      evidence: [...new Set(entrypoints.map((entry) => entry.source))],
+    });
+  }
+  if (testDirs.length > 0) {
+    const testEvidence = [...new Set(testDirs.map((dir) => {
+      const directory = dir.replace(/\/$/, "");
+      return signals.hasDir(directory) ? dir : normalized.find((file) => file.startsWith(dir));
+    }).filter((f): f is string => Boolean(f)))];
+    add({
+      kind: "tests",
+      statement: lang === "es"
+        ? `Los tests se colocan en ${testDirs.join(", ")}.`
+        : `Tests are placed under ${testDirs.join(", ")}.`,
+      evidence: testEvidence,
+    });
+  }
+
+  const sourceRoots = ["src", "lib"].filter((dir) => signals.hasDir(dir) || normalized.some((file) => file.startsWith(`${dir}/`)));
+  const sourceLocations = sourceRoots.flatMap((dir) =>
+    dir === "src" && signals.hasDir("src/main") ? ["src/main/"] : [`${dir}/`]
+  );
+  if (sourceLocations.length > 0) {
+    add({
+      kind: "source-layout",
+      statement: lang === "es"
+        ? `El código principal vive en ${sourceLocations.join(", ")}.`
+        : `Primary source code lives under ${sourceLocations.join(", ")}.`,
+      evidence: sourceLocations.map((location) => {
+        const directory = location.replace(/\/$/, "");
+        return signals.hasDir(directory) ? location : normalized.find((file) => file.startsWith(location))!;
+      }).filter(Boolean),
+    });
+  }
+
+  const layerPatterns: [string, RegExp][] = [
+    ["controller", /(?:^|\/)(?:controllers?)(?:\/|$)/i],
+    ["service", /(?:^|\/)(?:services?)(?:\/|$)/i],
+    ["repository", /(?:^|\/)(?:repositories|repository)(?:\/|$)/i],
+  ];
+  const layers = layerPatterns.map(([name, pattern]) => ({ name, file: normalized.find((file) => pattern.test(file)) }));
+  if (layers.every((layer) => layer.file)) {
+    add({
+      kind: "layers",
+      statement: lang === "es"
+        ? "El repositorio separa controller, service y repository en capas distintas."
+        : "The repository separates controller, service and repository into distinct layers.",
+      evidence: layers.map((layer) => layer.file!),
+    });
+  }
+
+  const workspaceManifests = (signals.packageJsons ?? []).filter((manifest) => manifest.path !== "package.json");
+  if (workspaceManifests.length > 0) {
+    add({
+      kind: "workspace",
+      statement: lang === "es"
+        ? `El workspace contiene ${workspaceManifests.length} paquete(s) JavaScript/TypeScript anidado(s).`
+        : `The workspace contains ${workspaceManifests.length} nested JavaScript/TypeScript package(s).`,
+      evidence: workspaceManifests.map((manifest) => manifest.path),
+    });
+  }
+  return facts;
+}
+
+function uniqueConfigValue(content: string, key: string): string | undefined {
+  const values = [...content.matchAll(new RegExp(`^\\s*${key}\\s*=\\s*([^#;\\r\\n]+)`, "gmi"))]
+    .map((match) => match[1].trim().toLowerCase());
+  const unique = [...new Set(values)];
+  return unique.length === 1 ? unique[0] : undefined;
+}
+
+export function extractConventionFacts(signals: RepoSignals, lang: Lang): ConventionFact[] {
+  const facts: ConventionFact[] = [];
+  const rootFiles = (signals.guidanceFiles ?? []).filter((file) => !evidencePath(file.path).includes("/"));
+  const get = (name: string) => rootFiles.find((file) => file.path.toLowerCase() === name.toLowerCase())?.content;
+  const add = (fact: Omit<ConventionFact, "scope" | "confidence">) =>
+    facts.push({ ...fact, scope: ".", confidence: "high" });
+
+  const editorConfig = get(".editorconfig");
+  if (editorConfig) {
+    const style = uniqueConfigValue(editorConfig, "indent_style");
+    const rawSize = uniqueConfigValue(editorConfig, "indent_size");
+    const size = rawSize && /^\d+$/.test(rawSize) ? rawSize : undefined;
+    if (style) add({
+      kind: "formatting",
+      statement: lang === "es"
+        ? `La indentación usa ${style === "space" ? "espacios" : style === "tab" ? "tabuladores" : style}${size ? ` con tamaño ${size}` : ""}.`
+        : `Indentation uses ${style === "space" ? "spaces" : style === "tab" ? "tabs" : style}${size ? ` with size ${size}` : ""}.`,
+      evidence: [".editorconfig"],
+    });
+    const finalNewline = uniqueConfigValue(editorConfig, "insert_final_newline");
+    if (finalNewline === "true") add({
+      kind: "formatting",
+      statement: lang === "es" ? "Los archivos deben terminar con una línea nueva." : "Files must end with a final newline.",
+      evidence: [".editorconfig"],
+    });
+  }
+
+  const tsconfig = get("tsconfig.json");
+  if (tsconfig && /["']strict["']\s*:\s*true\b/i.test(tsconfig)) add({
+    kind: "typescript",
+    statement: lang === "es" ? "TypeScript tiene activado el modo strict." : "TypeScript strict mode is enabled.",
+    evidence: ["tsconfig.json"],
+  });
+
+  const pyproject = get("pyproject.toml");
+  if (pyproject) {
+    for (const tool of ["ruff", "black"] as const) {
+      const section = pyproject.match(new RegExp(`(?:^|\\n)\\[tool\\.${tool}\\]([\\s\\S]*?)(?:\\n\\[|$)`, "i"))?.[1];
+      const lineLength = section?.match(/(?:^|\n)\s*line-length\s*=\s*(\d+)/i)?.[1];
+      if (lineLength) add({
+        kind: "python-style",
+        statement: lang === "es"
+          ? `${tool} configura una longitud máxima de línea de ${lineLength}.`
+          : `${tool} configures a maximum line length of ${lineLength}.`,
+        evidence: ["pyproject.toml"],
+      });
+    }
+  }
+
+  const contributing = get("CONTRIBUTING.md");
+  if (contributing) {
+    const directives = contributing.split(/\r?\n/)
+      .map((line) => line.match(/^\s*[-*]\s+(.{1,180})$/)?.[1]?.trim())
+      .filter((line): line is string => Boolean(line))
+      .filter((line) => /\b(?:must|should|required|do not|don't|run|use|follow|debe|debes|ejecuta|usa|sigue|no añadas)\b/i.test(line))
+      .slice(0, 5);
+    for (const directive of directives) add({
+      kind: "contributing",
+      statement: directive,
+      evidence: ["CONTRIBUTING.md"],
+    });
+  }
+  return facts;
+}
+
 export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
   const allCommands = [
     ...extractJsPackageCommands(signals),
@@ -267,6 +437,8 @@ export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
   ];
   const { kept, omitted } = filterCommands(allCommands);
   const { commands: ciCommands, omittedCount: omittedCiCount } = extractCiCommands(signals);
+  const testDirs = detectTestDirs(signals.files.filter((file) => !isAuxiliaryFactPath(file)));
+  const entrypoints = detectEntrypoints(signals);
   return {
     commands: kept,
     omittedCommands: omitted,
@@ -274,7 +446,9 @@ export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
     ciCommands,
     omittedCiCount,
     canonical: selectCanonicalCommands(signals, kept, ciCommands),
-    testDirs: detectTestDirs(signals.files),
-    entrypoints: detectEntrypoints(signals),
+    testDirs,
+    entrypoints,
+    architectureFacts: extractArchitectureFacts(signals, lang, testDirs, entrypoints),
+    conventionFacts: extractConventionFacts(signals, lang),
   };
 }

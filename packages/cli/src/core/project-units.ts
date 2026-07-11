@@ -97,6 +97,9 @@ export function buildPackageUnits(signals: RepoSignals): ProjectUnit[] {
           hasDir: (relativeDir) => signals.hasDir(`${prefix}${relativeDir}`),
           packageJson,
           packageJsons: [{ ...packageJson, path: "package.json" }],
+          guidanceFiles: (signals.guidanceFiles ?? [])
+            .filter((file) => file.path.startsWith(prefix))
+            .map((file) => ({ ...file, path: file.path.slice(prefix.length) })),
         },
       };
     });

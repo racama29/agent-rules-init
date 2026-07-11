@@ -7,3 +7,6 @@ dev = ["pytest"]
 
 [project.scripts]
 fixture-app = "fixture_app.cli:main"
+
+[tool.ruff]
+line-length = 100

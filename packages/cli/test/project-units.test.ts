@@ -31,6 +31,9 @@ describe("buildPackageUnits", () => {
           devDependencies: {}, scripts: { test: "node --test" }, moduleType: "commonjs",
         },
       ],
+      guidanceFiles: [{
+        path: "apps/web/tsconfig.json", content: '{"compilerOptions":{"strict":true}}',
+      }],
     };
 
     const units = buildPackageUnits(signals);
@@ -43,6 +46,9 @@ describe("buildPackageUnits", () => {
     expect(web.hasFile("tsconfig.json")).toBe(true);
     expect(web.hasDir("src")).toBe(true);
     expect(web.packageJsons?.[0].path).toBe("package.json");
+    expect(web.guidanceFiles).toEqual([{
+      path: "tsconfig.json", content: '{"compilerOptions":{"strict":true}}',
+    }]);
   });
 
   it("renders package-scoped rules and commands", () => {
@@ -60,7 +66,7 @@ describe("buildPackageUnits", () => {
     const output = renderProjectUnitAgents(unit, "en");
     expect(output?.path).toBe("apps/web/AGENTS.generated.md");
     expect(output?.content).toContain("using react");
-    expect(output?.content).toContain("`npm test` → `vitest run`");
+    expect(output?.content).toContain("- test: `npm test` (package.json)");
     expect(output?.content).not.toContain("npm --prefix");
   });
 

@@ -32,11 +32,13 @@ const facts: RepoFacts = {
   canonical: [],
   testDirs: [],
   entrypoints: [],
+  architectureFacts: [],
+  conventionFacts: [],
 };
 
 const emptyFacts: RepoFacts = {
   commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [],
-  testDirs: [], entrypoints: [],
+  testDirs: [], entrypoints: [], architectureFacts: [], conventionFacts: [],
 };
 
 describe("templates", () => {
@@ -54,6 +56,52 @@ describe("templates", () => {
   it("renders copilot-instructions with the same rule content", () => {
     const content = renderCopilotInstructions(entries, undefined, "es");
     expect(content).toContain("Proyecto JavaScript/TypeScript con react.");
+  });
+
+  it("renders genuinely different documents for each consumer", () => {
+    const intelligentFacts: RepoFacts = {
+      ...facts,
+      canonical: [{ kind: "test", command: "npm test", source: "package.json", confidence: "high", scope: "." }],
+      architectureFacts: [{
+        kind: "source-layout", statement: "Primary source code lives under src/.",
+        evidence: ["src/index.ts"], scope: ".", confidence: "high",
+      }],
+      conventionFacts: [{
+        kind: "typescript", statement: "TypeScript strict mode is enabled.",
+        evidence: ["tsconfig.json"], scope: ".", confidence: "high",
+      }],
+    };
+    const claude = renderClaudeMd(entries, intelligentFacts, "en");
+    const agents = renderAgentsMd(entries, intelligentFacts, "en");
+    const copilot = renderCopilotInstructions(entries, intelligentFacts, "en");
+    expect(new Set([claude, agents, copilot])).toHaveLength(3);
+    expect(claude).toContain("What CI runs");
+    expect(agents).toContain("Operational rules");
+    expect(agents).toContain("npm test");
+    expect(copilot).toContain("TypeScript strict mode is enabled");
+    expect(copilot).not.toContain("What CI runs");
+    expect(copilot).not.toContain("Repo commands");
+    expect(copilot).not.toContain("npm test");
+    expect(copilot).not.toContain("Mantén los componentes pequeños.");
+  });
+
+  it("renders provenance next to observed architecture and local conventions", () => {
+    const withEvidence: RepoFacts = {
+      ...emptyFacts,
+      architectureFacts: [{
+        kind: "tests", statement: "Tests are placed under test/.", evidence: ["test/app.test.js"],
+        scope: ".", confidence: "high",
+      }],
+      conventionFacts: [{
+        kind: "formatting", statement: "Indentation uses spaces with size 2.", evidence: [".editorconfig"],
+        scope: ".", confidence: "high",
+      }],
+    };
+    const output = renderClaudeMd(entries, withEvidence, "en");
+    expect(output).toContain("## Observed architecture");
+    expect(output).toContain("evidence: `test/app.test.js`");
+    expect(output).toContain("## Verified local conventions");
+    expect(output).toContain("evidence: `.editorconfig`");
   });
 
   it("renders one file per prompt template with claude and vscode paths, namespaced by packId", () => {
@@ -94,10 +142,11 @@ describe("templates", () => {
     expect(output.indexOf("## Comandos del repo")).toBeGreaterThan(output.indexOf("### Convenciones"));
   });
 
-  it("keeps output identical when facts are omitted or empty", () => {
+  it("keeps empty Claude facts stable and omits raw command catalogs from concise consumers", () => {
     expect(renderClaudeMd(entries, undefined, "es")).toBe(renderClaudeMd(entries, emptyFacts, "es"));
-    expect(renderAgentsMd(entries, facts, "es")).toContain("## Comandos del repo");
-    expect(renderCopilotInstructions(entries, facts, "es")).toContain("## Comandos del repo");
+    expect(renderClaudeMd(entries, facts, "es")).toContain("## Comandos del repo");
+    expect(renderAgentsMd(entries, facts, "es")).not.toContain("## Comandos del repo");
+    expect(renderCopilotInstructions(entries, facts, "es")).not.toContain("## Comandos del repo");
   });
 
   it("renders facts section titles and header in English", () => {
@@ -117,7 +166,7 @@ describe("templates", () => {
   it("renders a canonical commands section with provenance, high confidence only", () => {
     const facts: RepoFacts = {
       commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
-      testDirs: [], entrypoints: [],
+      testDirs: [], entrypoints: [], architectureFacts: [], conventionFacts: [],
       canonical: [
         { kind: "test", command: "npm test", source: "package.json", confidence: "high", scope: "." },
         { kind: "build", command: "gradle build", source: "build.gradle", confidence: "low", scope: "." },

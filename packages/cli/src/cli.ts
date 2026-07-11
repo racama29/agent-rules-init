@@ -9,7 +9,6 @@ import {
   renderAgentsMd,
   renderCopilotInstructions,
   renderPromptFiles,
-  renderRepoFacts,
   type RenderEntry,
 } from "./core/templates.js";
 import { buildRepoFacts } from "./core/repo-facts.js";
@@ -121,15 +120,14 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
       }
     }
   } else {
-    const factsBlock = renderRepoFacts(facts, lang);
-    const fallbackDocument = (title: string) =>
-      `${title}\n\n${ui.noStackFallback}\n` + (factsBlock ? `\n${factsBlock}\n` : "");
+    const withFallback = (content: string) =>
+      content.replace(ui.generatedHeader, `${ui.generatedHeader}\n\n${ui.noStackFallback}`);
     files.push(
-      { path: "CLAUDE.generated.md", content: fallbackDocument("# CLAUDE.md") },
-      { path: "AGENTS.generated.md", content: fallbackDocument("# AGENTS.md") },
+      { path: "CLAUDE.generated.md", content: withFallback(renderClaudeMd([], facts, lang)) },
+      { path: "AGENTS.generated.md", content: withFallback(renderAgentsMd([], facts, lang)) },
       {
         path: ".github/copilot-instructions.generated.md",
-        content: fallbackDocument("# Copilot Instructions"),
+        content: withFallback(renderCopilotInstructions([], facts, lang)),
       }
     );
   }

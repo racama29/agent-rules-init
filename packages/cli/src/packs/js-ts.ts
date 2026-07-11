@@ -188,7 +188,11 @@ function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleS
     conventions.push(detection.moduleFormat === "module" ? t.esModules : t.commonJs);
   }
   return {
-    summary: summarySentence(lang, detection.usesTypeScript ? "TypeScript" : "JavaScript", framework),
+    summary: detection.frameworkSource
+      ? lang === "es"
+        ? `Repositorio ${detection.usesTypeScript ? "TypeScript" : "JavaScript"} que implementa ${detection.frameworkSource}.`
+        : `${detection.usesTypeScript ? "TypeScript" : "JavaScript"} repository implementing ${detection.frameworkSource}.`
+      : summarySentence(lang, detection.usesTypeScript ? "TypeScript" : "JavaScript", framework),
     conventions,
     architectureNotes: t.arch,
   };

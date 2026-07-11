@@ -41,6 +41,7 @@ describe("pythonPack", () => {
     expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
     expect(detection?.frameworkSource).toBe("flask");
     expect(detection?.testRunner).toEqual({ value: "pytest", confidence: "high" });
+    expect(pythonPack.rules(detection!, "en").summary).toBe("Python repository implementing flask.");
   });
 
   it("keeps Flask-specific review risks for Flask's own source repo", () => {
@@ -49,7 +50,7 @@ describe("pythonPack", () => {
     }))!;
     const review = pythonPack.promptTemplates(detection, "en", {
       facts: { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
-        canonical: [], testDirs: ["tests/"], entrypoints: [] },
+        canonical: [], testDirs: ["tests/"], entrypoints: [], architectureFacts: [], conventionFacts: [] },
     }).find((template) => template.id === "review")!;
     expect(review.body).toContain("application/request context");
     expect(review.body).not.toContain("using flask");

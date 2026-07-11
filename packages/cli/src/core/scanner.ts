@@ -270,39 +270,47 @@ export function scanRepo(rootPath: string): RepoSignals {
   // Multi-module Maven/Gradle projects (parent + child modules) each have their own
   // pom.xml/build.gradle, and the module that actually declares the framework/Kotlin
   // plugin/test runner isn't necessarily the shallowest one. Aggregate all of them.
-  const pomPaths = findAllByNames(files, ["pom.xml"]);
-  const buildGradlePaths = findAllByNames(files, ["build.gradle", "build.gradle.kts"]);
-  const gemfilePath = findFirst(files, "Gemfile");
-  const goModPath = findFirst(files, "go.mod");
-  const cargoTomlPath = findFirst(files, "Cargo.toml");
+  const projectFiles = files.filter((file) => !isUnderNonProjectDir(file));
+  const pomPaths = findAllByNames(projectFiles, ["pom.xml"]);
+  const buildGradlePaths = findAllByNames(projectFiles, ["build.gradle", "build.gradle.kts"]);
+  const gemfilePath = findFirst(projectFiles, "Gemfile");
+  const goModPath = findFirst(projectFiles, "go.mod");
+  const cargoTomlPath = findFirst(projectFiles, "Cargo.toml");
   // .NET solutions routinely split into several .csproj files (domain/infra/web/tests);
   // picking just the "shallowest" one is close to arbitrary and often lands on a plain
   // class library that has neither the web framework nor the test runner reference.
   // Concatenate all of them so detection can find those references wherever they live.
-  const csprojPaths = findAllByExtension(files, ".csproj");
-  const packageSwiftPath = findFirst(files, "Package.swift");
+  const csprojPaths = findAllByExtension(projectFiles, ".csproj");
+  const packageSwiftPath = findFirst(projectFiles, "Package.swift");
   // Melos/pub workspaces have a root pubspec.yaml that's just workspace glue (no
   // `flutter`/`flutter_test` dependency) plus one real pubspec.yaml per package under
   // packages/*. Aggregate all of them so the actual framework/test runner is found.
-  const pubspecYamlPaths = findAllByNames(files, ["pubspec.yaml"]);
-  const cmakeListsPath = findFirst(files, "CMakeLists.txt");
+  const pubspecYamlPaths = findAllByNames(projectFiles, ["pubspec.yaml"]);
+  const cmakeListsPath = findFirst(projectFiles, "CMakeLists.txt");
   // Un Makefile que solo existe bajo docs/, tools/, etc. es tooling auxiliar (p. ej. el
   // Makefile de Sphinx en docs/ de Flask): sus targets no se pueden ejecutar desde la
   // raíz y no describen el proyecto. Mismo criterio que los manifiestos Python.
   const makefilePath =
     findFirstPreferringRealProjectDirs(files, "Makefile") ??
     findFirstPreferringRealProjectDirs(files, "makefile");
-  const mixExsPath = findFirst(files, "mix.exs");
-  const buildSbtPath = findFirst(files, "build.sbt");
-  const rDescriptionPath = findFirst(files, "DESCRIPTION");
-  const renvLockPath = findFirst(files, "renv.lock");
-  const toxIniPath = findFirst(files, "tox.ini");
+  const mixExsPath = findFirst(projectFiles, "mix.exs");
+  const buildSbtPath = findFirst(projectFiles, "build.sbt");
+  const rDescriptionPath = findFirst(projectFiles, "DESCRIPTION");
+  const renvLockPath = findFirst(projectFiles, "renv.lock");
+  const toxIniPath = findFirst(projectFiles, "tox.ini");
   const workflowPaths = files.filter((f) => {
     const normalized = f.split(path.sep).join("/");
     return (
       normalized.startsWith(".github/workflows/") &&
       (normalized.endsWith(".yml") || normalized.endsWith(".yaml"))
     );
+  });
+  const guidanceNames = new Set([
+    "CONTRIBUTING.md", ".editorconfig", "tsconfig.json", "pyproject.toml",
+  ]);
+  const guidancePaths = files.filter((file) => {
+    const normalized = file.split(path.sep).join("/");
+    return guidanceNames.has(path.posix.basename(normalized));
   });
 
   return {
@@ -343,5 +351,8 @@ export function scanRepo(rootPath: string): RepoSignals {
         content: readTextIfExists(path.join(rootPath, p)),
       }))
       .filter((w): w is { path: string; content: string } => w.content !== undefined),
+    guidanceFiles: guidancePaths
+      .map((p) => ({ path: p.split(path.sep).join("/"), content: readTextIfExists(path.join(rootPath, p)) }))
+      .filter((f): f is { path: string; content: string } => f.content !== undefined),
   };
 }

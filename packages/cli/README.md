@@ -14,6 +14,8 @@ Use `--lang es` or `--lang en` to select the output language. See the [full docu
 
 Automation is supported through `--dry-run`, `--check`, `--json` and `--non-interactive`. Repository defaults and per-project overrides can be stored in `.agent-rules-init.yml`.
 
+Generated documents share an evidence-backed model but are not duplicates: Claude receives broad repository context, AGENTS receives operational commands and scope, and Copilot receives concise implementation conventions. Observed architecture and local conventions include their source files so specific claims can be audited.
+
 ## License
 
 MIT

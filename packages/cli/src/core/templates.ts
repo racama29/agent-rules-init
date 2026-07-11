@@ -1,5 +1,5 @@
 import { UI, type Lang } from "./i18n.js";
-import type { DetectionResult, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
+import type { DetectionResult, EvidenceFact, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
 import { SOURCE_FILES } from "./canonical-commands.js";
 
 export interface RenderEntry {
@@ -7,25 +7,58 @@ export interface RenderEntry {
   ruleSet: RuleSet;
 }
 
-function renderSection(entries: RenderEntry[], lang: Lang): string {
+function renderSection(
+  entries: RenderEntry[],
+  lang: Lang,
+  options: { summaries?: boolean; conventions?: boolean; architecture?: boolean; operationalConventions?: boolean } = {}
+): string {
   const ui = UI[lang];
+  const { summaries = true } = options;
   return entries
     .map(({ detection, ruleSet }) => {
-      const conventions = ruleSet.conventions.map((c) => `- ${c}`).join("\n");
+      const conventionItems = options.operationalConventions === false
+        ? ruleSet.conventions.filter((item) => !/^(?:Run the tests|Run the repository|Ejecuta los tests|Ejecuta la suite)/i.test(item))
+        : ruleSet.conventions;
+      const conventions = conventionItems.map((c) => `- ${c}`).join("\n");
       const architecture = ruleSet.architectureNotes.map((a) => `- ${a}`).join("\n");
-      return [
+      const parts = [
         `## ${detection.language} (${detection.packId})`,
-        "",
-        ruleSet.summary,
-        "",
-        `### ${ui.sections.conventions}`,
-        conventions,
-        "",
-        `### ${ui.sections.architecture}`,
-        architecture,
-      ].join("\n");
+      ];
+      if (summaries) parts.push("", ruleSet.summary);
+      if (options.conventions !== false && conventions) parts.push("", `### ${ui.sections.conventions}`, conventions);
+      if (options.architecture !== false && architecture) parts.push("", `### ${ui.sections.architecture}`, architecture);
+      return parts.join("\n");
     })
     .join("\n\n");
+}
+
+function evidenceLabel(lang: Lang): string {
+  return lang === "es" ? "evidencia" : "evidence";
+}
+
+function renderEvidenceSection(title: string, facts: readonly EvidenceFact[], lang: Lang): string {
+  const high = facts.filter((fact) => fact.confidence === "high");
+  if (high.length === 0) return "";
+  const lines = high.map((fact) => `- ${fact.statement} (${evidenceLabel(lang)}: ${fact.evidence.map((item) => `\`${item}\``).join(", ")})`);
+  return [`## ${title}`, "", ...lines].join("\n");
+}
+
+function architectureFactsTitle(lang: Lang): string {
+  return lang === "es" ? "Arquitectura observada" : "Observed architecture";
+}
+
+function localConventionsTitle(lang: Lang): string {
+  return lang === "es" ? "Convenciones locales verificadas" : "Verified local conventions";
+}
+
+function renderCanonical(facts: RepoFacts, lang: Lang): string {
+  const commands = facts.canonical.filter((command) => command.confidence === "high");
+  if (commands.length === 0) return "";
+  return [
+    `## ${UI[lang].sections.canonical}`,
+    "",
+    ...commands.map((command) => `- ${command.kind}: \`${command.command}\` (${command.source})`),
+  ].join("\n");
 }
 
 export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
@@ -61,6 +94,10 @@ export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
     if (facts.omittedCiCount > 0) lines.push(`- ${ui.andMore(facts.omittedCiCount)}`);
     sections.push([`## ${ui.sections.ci}`, "", ...lines].join("\n"));
   }
+  const architecture = renderEvidenceSection(architectureFactsTitle(lang), facts.architectureFacts ?? [], lang);
+  if (architecture) sections.push(architecture);
+  const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+  if (conventions) sections.push(conventions);
   return sections.join("\n\n");
 }
 
@@ -71,7 +108,7 @@ function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts 
     "",
     UI[lang].generatedHeader,
     "",
-    renderSection(entries, lang),
+    renderSection(entries, lang, { architecture: !(facts?.architectureFacts?.length) }),
     ...(factsBlock ? ["", factsBlock] : []),
   ].join("\n");
 }
@@ -81,11 +118,36 @@ export function renderClaudeMd(entries: RenderEntry[], facts: RepoFacts | undefi
 }
 
 export function renderAgentsMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  return renderDocument("# AGENTS.md", entries, facts, lang);
+  const intro = lang === "es"
+    ? "Reglas operativas para modificar este repositorio. Respeta el alcance y valida los cambios con los comandos indicados."
+    : "Operational rules for modifying this repository. Respect scope and validate changes with the commands below.";
+  const blocks = [
+    "# AGENTS.md", "", UI[lang].generatedHeader, "", intro, "",
+    renderSection(entries, lang, { architecture: !(facts?.architectureFacts?.length) }),
+  ];
+  if (facts) {
+    const canonical = renderCanonical(facts, lang);
+    const architecture = renderEvidenceSection(architectureFactsTitle(lang), facts.architectureFacts ?? [], lang);
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+    for (const block of [canonical, architecture, conventions]) if (block) blocks.push("", block);
+  }
+  return blocks.join("\n");
 }
 
 export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  return renderDocument("# Copilot Instructions", entries, facts, lang);
+  const intro = lang === "es"
+    ? "Aplica estas convenciones al completar y modificar código. Omite tareas operativas de terminal salvo que sean necesarias para el cambio."
+    : "Apply these conventions when completing and modifying code. Omit terminal operations unless the change requires them.";
+  const blocks = [
+    "# Copilot Instructions", "", UI[lang].generatedHeader, "", intro, "",
+    renderSection(entries, lang, { architecture: false, operationalConventions: false }),
+  ];
+  if (facts) {
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+    const architecture = renderEvidenceSection(architectureFactsTitle(lang), facts.architectureFacts ?? [], lang);
+    for (const block of [conventions, architecture]) if (block) blocks.push("", block);
+  }
+  return blocks.join("\n");
 }
 
 export function renderPromptFiles(

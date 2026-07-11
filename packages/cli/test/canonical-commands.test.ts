@@ -171,6 +171,7 @@ describe("selectCanonicalCommands language fallbacks", () => {
     const facts = {
       commands, omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
       canonical: selectCanonicalCommands(signals, commands, []), testDirs: [], entrypoints: [],
+      architectureFacts: [], conventionFacts: [],
     };
     expect(canonicalOf({ facts, signals }, "test", "js-ts")?.command).toBe("npm test");
     expect(canonicalOf({ facts, signals }, "test", "python")).toBeUndefined();

@@ -136,7 +136,11 @@ function rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleS
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   const testCmd = canonicalOf(ctx, "test", "python")?.command ?? runner;
   return {
-    summary: summarySentence(lang, "Python", framework),
+    summary: detection.frameworkSource
+      ? lang === "es"
+        ? `Repositorio Python que implementa ${detection.frameworkSource}.`
+        : `Python repository implementing ${detection.frameworkSource}.`
+      : summarySentence(lang, "Python", framework),
     conventions: [t.style, runTestsConvention(lang, testCmd), t.deps],
     architectureNotes: t.arch,
   };

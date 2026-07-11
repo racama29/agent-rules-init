@@ -51,6 +51,8 @@ export interface RepoSignals {
   renvLock?: string;
   toxIni?: string;
   githubWorkflows?: { path: string; content: string }[];
+  /** Archivos locales de guía/configuración seleccionados de forma conservadora. */
+  guidanceFiles?: { path: string; content: string }[];
 }
 
 export type Confidence = "high" | "low";
@@ -114,6 +116,21 @@ export interface CanonicalCommand {
   scope: string;
 }
 
+export interface EvidenceFact {
+  statement: string;
+  evidence: string[];
+  scope: string;
+  confidence: Confidence;
+}
+
+export interface ArchitectureFact extends EvidenceFact {
+  kind: "entrypoint" | "tests" | "layers" | "workspace" | "source-layout";
+}
+
+export interface ConventionFact extends EvidenceFact {
+  kind: "formatting" | "typescript" | "python-style" | "contributing";
+}
+
 export interface RepoFacts {
   commands: CommandEntry[];
   omittedCommands: { source: CommandSource; count: number }[];
@@ -123,6 +140,8 @@ export interface RepoFacts {
   canonical: CanonicalCommand[];
   testDirs: string[];
   entrypoints: { label: string; target: string; source: string }[];
+  architectureFacts: ArchitectureFact[];
+  conventionFacts: ConventionFact[];
 }
 
 export interface PackContext {

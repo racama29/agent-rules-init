@@ -12,6 +12,8 @@ import {
   buildRepoFacts,
   detectTestDirs,
   detectEntrypoints,
+  extractArchitectureFacts,
+  extractConventionFacts,
 } from "../src/core/repo-facts.js";
 import type { CommandEntry, RepoSignals } from "../src/core/types.js";
 
@@ -334,6 +336,86 @@ describe("detectEntrypoints", () => {
   });
 });
 
+describe("evidence-backed intelligence", () => {
+  it("extracts observed layout, tests, entrypoints, layers and workspaces with evidence", () => {
+    const signals = baseSignals({
+      files: [
+        "src/controllers/UserController.ts", "src/services/UserService.ts",
+        "src/repositories/UserRepository.ts", "test/user.test.ts",
+      ],
+      packageJson: {
+        main: "src/index.ts", dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "module",
+      },
+      packageJsons: [{
+        path: "packages/web/package.json", dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "module",
+      }],
+    });
+    const facts = extractArchitectureFacts(signals, "en");
+    expect(facts.map((fact) => fact.kind)).toEqual([
+      "entrypoint", "tests", "source-layout", "layers", "workspace",
+    ]);
+    expect(facts.every((fact) => fact.confidence === "high" && fact.evidence.length > 0)).toBe(true);
+    expect(facts.find((fact) => fact.kind === "layers")?.evidence).toHaveLength(3);
+  });
+
+  it("does not promote fixture and asset folders to independent test layouts", () => {
+    expect(detectTestDirs([
+      "tests/test_app.py", "tests/static/config.json", "tests/templates/index.html", "tests/unit/test_user.py",
+    ])).toEqual(["tests/", "tests/unit/"]);
+  });
+
+  it("excludes auxiliary fixture, docs and example tests from root facts", () => {
+    const facts = buildRepoFacts(baseSignals({
+      files: [
+        "packages/cli/test/cli.test.ts", "fixtures/demo/tests/test_demo.py",
+        "docs/specs/test_plan.md", "examples/app/test/example.test.js",
+      ],
+    }), "en");
+    expect(facts.testDirs).toEqual(["packages/cli/test/"]);
+  });
+
+  it("does not claim a layered architecture from a controller directory alone", () => {
+    const facts = extractArchitectureFacts(baseSignals({ files: ["src/controllers/UserController.ts"] }), "en");
+    expect(facts.some((fact) => fact.kind === "layers")).toBe(false);
+  });
+
+  it("prefers src/main as the evidenced source root when that layout exists", () => {
+    const facts = extractArchitectureFacts(baseSignals({
+      files: ["src/checkstyle/rules.xml"],
+      hasDir: (dir) => dir === "src" || dir === "src/main",
+    }), "en");
+    expect(facts.find((fact) => fact.kind === "source-layout")).toMatchObject({
+      statement: "Primary source code lives under src/main/.", evidence: ["src/main/"],
+    });
+  });
+
+  it("extracts only explicit local conventions and keeps their source", () => {
+    const facts = extractConventionFacts(baseSignals({
+      guidanceFiles: [
+        { path: ".editorconfig", content: "root = true\n[*]\nindent_style = space\nindent_size = 2\ninsert_final_newline = true\n" },
+        { path: "tsconfig.json", content: '{"compilerOptions":{"strict":true}}' },
+        { path: "pyproject.toml", content: "[tool.ruff]\nline-length = 100\n" },
+        { path: "CONTRIBUTING.md", content: "# Guide\n- Run `npm test` before opening a PR.\n- Background information only.\n" },
+      ],
+    }), "en");
+    expect(facts.map((fact) => fact.kind)).toEqual([
+      "formatting", "formatting", "typescript", "python-style", "contributing",
+    ]);
+    expect(facts.every((fact) => fact.evidence.length === 1 && fact.confidence === "high")).toBe(true);
+    expect(facts.map((fact) => fact.statement).join("\n")).not.toContain("Background information");
+  });
+
+  it("omits ambiguous editorconfig values instead of inventing one", () => {
+    const facts = extractConventionFacts(baseSignals({
+      guidanceFiles: [{
+        path: ".editorconfig",
+        content: "[*.ts]\nindent_style = space\n[*.py]\nindent_style = tab\n",
+      }],
+    }), "en");
+    expect(facts).toEqual([]);
+  });
+});
+
 describe("buildRepoFacts", () => {
   it("assembles commands from every source plus structure and CI", () => {
     const facts = buildRepoFacts(
@@ -364,7 +446,7 @@ describe("buildRepoFacts", () => {
     const facts = buildRepoFacts(baseSignals({}), "es");
     expect(facts).toEqual({
       commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [],
-      testDirs: [], entrypoints: [],
+      testDirs: [], entrypoints: [], architectureFacts: [], conventionFacts: [],
     });
   });
 
