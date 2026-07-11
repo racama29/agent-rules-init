@@ -260,11 +260,11 @@ exports[`corpus snapshots > monorepo-js-python (en) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (vue). Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -316,11 +316,11 @@ Python project using fastapi.
 - \`backend/\`",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from vue conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (vue). Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -409,11 +409,11 @@ exports[`corpus snapshots > monorepo-js-python (es) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (vue). Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -465,11 +465,11 @@ Proyecto Python con fastapi.
 - \`backend/\`",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de vue. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (vue). Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -558,15 +558,15 @@ exports[`corpus snapshots > node-express-mocha (en) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (express). Run \`npm test\` and \`npm run lint\` before approving the review. Pay special attention to middleware control flow, error propagation through \`next(err)\` and response lifecycle handling. Also look for bugs: async/await race conditions. Tests live under \`test/\`, \`test/acceptance/\`. Report only concrete findings with file and line references.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
-Write tests with mocha for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with mocha for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`npm test\` before finishing. Place new tests under \`test/\`, \`test/acceptance/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -577,7 +577,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using express.
 
 ### Conventions
-- Run the tests with mocha before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -609,15 +609,15 @@ JavaScript project using express.
 - \`npm run lint\` (ci.yml)",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from express conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (express). Run \`npm test\` and \`npm run lint\` before approving the review. Pay special attention to middleware control flow, error propagation through \`next(err)\` and response lifecycle handling. Also look for bugs: async/await race conditions. Tests live under \`test/\`, \`test/acceptance/\`. Report only concrete findings with file and line references.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
-Write tests with mocha for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with mocha for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`npm test\` before finishing. Place new tests under \`test/\`, \`test/acceptance/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -628,7 +628,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using express.
 
 ### Conventions
-- Run the tests with mocha before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -667,7 +667,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using express.
 
 ### Conventions
-- Run the tests with mocha before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -704,15 +704,15 @@ exports[`corpus snapshots > node-express-mocha (es) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (express). Ejecuta \`npm test\` y \`npm run lint\` antes de dar por buena la revisión. Presta especial atención al flujo de middleware, la propagación de errores con \`next(err)\` y el ciclo de vida de la respuesta. Busca también bugs: condiciones de carrera en async/await. Los tests viven en \`test/\`, \`test/acceptance/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
-Escribe tests con mocha para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con mocha para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`npm test\` antes de terminar. Coloca los tests nuevos en \`test/\`, \`test/acceptance/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -723,7 +723,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con express.
 
 ### Convenciones
-- Ejecuta los tests con mocha antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura
@@ -755,15 +755,15 @@ Proyecto JavaScript con express.
 - \`npm run lint\` (ci.yml)",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de express. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (express). Ejecuta \`npm test\` y \`npm run lint\` antes de dar por buena la revisión. Presta especial atención al flujo de middleware, la propagación de errores con \`next(err)\` y el ciclo de vida de la respuesta. Busca también bugs: condiciones de carrera en async/await. Los tests viven en \`test/\`, \`test/acceptance/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
-Escribe tests con mocha para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con mocha para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`npm test\` antes de terminar. Coloca los tests nuevos en \`test/\`, \`test/acceptance/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -774,7 +774,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con express.
 
 ### Convenciones
-- Ejecuta los tests con mocha antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura
@@ -813,7 +813,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con express.
 
 ### Convenciones
-- Ejecuta los tests con mocha antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura
@@ -850,11 +850,11 @@ exports[`corpus snapshots > node-plain (en) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions. Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -877,11 +877,11 @@ JavaScript project.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions. Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -924,11 +924,11 @@ exports[`corpus snapshots > node-plain (es) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio. Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
@@ -951,11 +951,11 @@ Proyecto JavaScript.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio. Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
@@ -998,15 +998,15 @@ exports[`corpus snapshots > node-react-vitest (en) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (react). Run \`npm test\` before approving the review. Pay special attention to hook dependencies (\`useEffect\`), unnecessary re-renders and derived state. Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
-Write tests with vitest for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with vitest for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`npm test\` before finishing.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -1017,7 +1017,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using react.
 
 ### Conventions
-- Run the tests with vitest before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -1033,15 +1033,15 @@ JavaScript project using react.
 - \`npm test\` → \`vitest run\` (package.json)",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propose refactors that reduce duplication and improve readability without changing observable behavior. Respect the existing types.
+Propose refactors that reduce duplication and improve readability without changing observable behavior.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Review the current diff looking for bugs, async/await race conditions and deviations from react conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's CommonJS conventions (react). Run \`npm test\` before approving the review. Pay special attention to hook dependencies (\`useEffect\`), unnecessary re-renders and derived state. Also look for bugs: async/await race conditions. Report only concrete findings with file and line references.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
-Write tests with vitest for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with vitest for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`npm test\` before finishing.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -1052,7 +1052,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using react.
 
 ### Conventions
-- Run the tests with vitest before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -1075,7 +1075,7 @@ Generated by agent-rules-init from what was detected in this repo.
 JavaScript project using react.
 
 ### Conventions
-- Run the tests with vitest before finishing a task.
+- Run the tests with npm test before finishing a task.
 - Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.
 
 ### Architecture
@@ -1096,15 +1096,15 @@ exports[`corpus snapshots > node-react-vitest (es) 1`] = `
 {
   ".claude/commands/js-ts-refactor.generated.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".claude/commands/js-ts-review.generated.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (react). Ejecuta \`npm test\` antes de dar por buena la revisión. Presta especial atención a las dependencias de hooks (\`useEffect\`), renders innecesarios y estado derivado. Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/js-ts-testing.generated.md": "# Testing (JS/TS)
 
-Escribe tests con vitest para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con vitest para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`npm test\` antes de terminar.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -1115,7 +1115,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con react.
 
 ### Convenciones
-- Ejecuta los tests con vitest antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura
@@ -1131,15 +1131,15 @@ Proyecto JavaScript con react.
 - \`npm test\` → \`vitest run\` (package.json)",
   ".github/prompts/js-ts-refactor.generated.prompt.md": "# Refactor (JS/TS)
 
-Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.
+Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.
 ",
   ".github/prompts/js-ts-review.generated.prompt.md": "# Code Review (JS/TS)
 
-Revisa el diff actual buscando bugs, condiciones de carrera en async/await y desviaciones de las convenciones de react. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones CommonJS de este repositorio (react). Ejecuta \`npm test\` antes de dar por buena la revisión. Presta especial atención a las dependencias de hooks (\`useEffect\`), renders innecesarios y estado derivado. Busca también bugs: condiciones de carrera en async/await. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/js-ts-testing.generated.prompt.md": "# Testing (JS/TS)
 
-Escribe tests con vitest para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con vitest para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`npm test\` antes de terminar.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -1150,7 +1150,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con react.
 
 ### Convenciones
-- Ejecuta los tests con vitest antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura
@@ -1173,7 +1173,7 @@ Generado por agent-rules-init a partir de lo detectado en este repo.
 Proyecto JavaScript con react.
 
 ### Convenciones
-- Ejecuta los tests con vitest antes de terminar una tarea.
+- Ejecuta los tests con npm test antes de terminar una tarea.
 - Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.
 
 ### Arquitectura

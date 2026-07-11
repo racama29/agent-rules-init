@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { jsTsPack } from "../../src/packs/js-ts.js";
 import type { RepoSignals } from "../../src/core/types.js";
+import { buildRepoFacts } from "../../src/core/repo-facts.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return {
@@ -302,5 +303,54 @@ describe("jsTsPack", () => {
     expect(detection.usesTypeScript).toBe(true);
     const review = jsTsPack.promptTemplates(detection, "en").find((t) => t.id === "review")!;
     expect(review.body).toMatch(/typing/i);
+  });
+});
+
+function expressLikeSignalsAndDetection() {
+  const signals = baseSignals({
+    files: ["lib/app.js", "test/app.test.js", "test/acceptance/routes.test.js", "package-lock.json"],
+    hasFile: (p) => p === "package-lock.json",
+    packageJson: {
+      main: "lib/app.js",
+      dependencies: { express: "^4.19.0" },
+      devDependencies: { mocha: "^10.4.0", eslint: "^9.0.0" },
+      scripts: { test: "mocha --recursive test/", lint: "eslint lib/ test/" },
+      moduleType: "commonjs",
+    },
+  });
+  const detection = jsTsPack.detect(signals)!;
+  const ctx = { facts: buildRepoFacts(signals, "en") };
+  return { detection, ctx };
+}
+
+describe("enriched js-ts prompts", () => {
+  it("review prompt cites real commands, paths and module format", () => {
+    const { detection, ctx } = expressLikeSignalsAndDetection();
+    const review = jsTsPack.promptTemplates(detection, "en", ctx).find((t) => t.id === "review")!;
+    expect(review.body).toContain("`npm test`");
+    expect(review.body).toContain("`npm run lint`");
+    expect(review.body).toContain("`test/`");
+    expect(review.body).toContain("CommonJS");
+    expect(review.body).toContain("next(err)");
+    expect(review.body).not.toMatch(/typing|tipado/i);
+  });
+
+  it("testing prompt uses the canonical test command and real test dirs", () => {
+    const { detection, ctx } = expressLikeSignalsAndDetection();
+    const testing = jsTsPack.promptTemplates(detection, "en", ctx).find((t) => t.id === "testing")!;
+    expect(testing.body).toContain("`npm test`");
+    expect(testing.body).toContain("`test/`");
+  });
+
+  it("rules use the canonical test command instead of the runner name", () => {
+    const { detection, ctx } = expressLikeSignalsAndDetection();
+    const ruleSet = jsTsPack.rules(detection, "en", ctx);
+    expect(ruleSet.conventions.join("\n")).toContain("npm test");
+  });
+
+  it("prompts still render without a context (backwards compatible)", () => {
+    const { detection } = expressLikeSignalsAndDetection();
+    const templates = jsTsPack.promptTemplates(detection, "en");
+    expect(templates).toHaveLength(3);
   });
 });

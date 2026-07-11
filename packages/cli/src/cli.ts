@@ -98,10 +98,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const detections = applyAnswers(rawDetections, answers);
   const facts = buildRepoFacts(signals, lang);
   options.onFacts?.(facts);
+  const ctx = { facts };
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
-    return { detection, ruleSet: pack.rules(detection, lang) };
+    return { detection, ruleSet: pack.rules(detection, lang, ctx) };
   });
 
   const files: { path: string; content: string }[] = [];
@@ -115,7 +116,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     });
     for (const detection of detections) {
       const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
-      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang))) {
+      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx))) {
         files.push(file);
       }
     }

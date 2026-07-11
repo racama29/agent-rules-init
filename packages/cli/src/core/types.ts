@@ -123,9 +123,13 @@ export interface RepoFacts {
   entrypoints: { label: string; target: string; source: string }[];
 }
 
+export interface PackContext {
+  facts: RepoFacts;
+}
+
 export interface Pack {
   id: string;
   detect(signals: RepoSignals): DetectionResult | null;
-  rules(detection: DetectionResult, lang: Lang): RuleSet;
-  promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[];
+  rules(detection: DetectionResult, lang: Lang, ctx?: PackContext): RuleSet;
+  promptTemplates(detection: DetectionResult, lang: Lang, ctx?: PackContext): PromptTemplate[];
 }
