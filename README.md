@@ -17,6 +17,7 @@ The CLI scans the repo, detects the stack(s) present, and generates a set of fil
 - `CLAUDE.generated.md`
 - `AGENTS.generated.md`
 - `.github/copilot-instructions.generated.md`
+- `<workspace>/AGENTS.generated.md` for each nested JS/TS package
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
@@ -25,6 +26,7 @@ The CLI scans the repo, detects the stack(s) present, and generates a set of fil
 Besides per-stack advice, the generated files include **facts extracted from your repo**:
 
 - **Repo commands** — the real build/test/lint commands declared in `package.json` scripts, `composer.json` scripts, `Makefile` targets, `mix.exs` aliases and `tox.ini` envs.
+- **Workspace-aware detection** — nested JS/TS packages get path-scoped rules and executable commands for npm, pnpm, Yarn or Bun.
 - **Structure** — top-level directories, annotated only when their meaning is unambiguous.
 - **What CI runs** — the `run:` steps from your `.github/workflows/*.yml` (read locally; the CLI never touches the network).
 
@@ -32,7 +34,7 @@ If something cannot be inferred with confidence (e.g. the framework), the CLI as
 
 **Last step, manual on purpose:** review the generated content and, once you are happy with it, drop the `.generated` suffix (`CLAUDE.generated.md` → `CLAUDE.md`, etc.) — AI assistants only read the final name. This is intentional: nothing you hand-tuned ever gets silently overwritten.
 
-If you have `claude` or `codex` installed and authenticated, the CLI offers (optional, never automatic) to use your own session to polish the final wording.
+If you have `claude` or `codex` installed and authenticated, the CLI offers (optional, never automatic) to use your own session to polish the final wording. Files are polished in validated batches to avoid starting one assistant process per output file.
 
 ## Options
 
@@ -41,7 +43,29 @@ npx agent-rules-init             # scan the current directory
 npx agent-rules-init --lang en   # force the content language (es|en); defaults to your system locale
 npx agent-rules-init --help      # show help
 npx agent-rules-init --version   # show the version
+npx agent-rules-init --dry-run  # preview every file without writing
+npx agent-rules-init --check    # exit 1 when generated files are missing or outdated
+npx agent-rules-init --json     # emit one machine-readable result
+npx agent-rules-init --non-interactive # skip questions and AI polishing
 ```
+
+## Repository configuration
+
+Optional settings live in `.agent-rules-init.yml` (or `.yaml`):
+
+```yaml
+lang: en
+noAi: true
+exclude:
+  - legacy/**
+projects:
+  apps/web:
+    framework: react
+    testRunner: vitest
+    packageManager: pnpm
+```
+
+Project overrides are applied to the package-scoped `AGENTS.generated.md`. Excluded JS/TS packages do not contribute dependencies, commands or scoped output.
 
 All generated content and CLI messages are available in **English and Spanish**. By default the language is detected from your system locale (`es-*` → Spanish, anything else → English).
 

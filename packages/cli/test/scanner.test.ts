@@ -30,6 +30,76 @@ describe("scanRepo", () => {
     expect(signals.requirementsTxt).toContain("fastapi");
   });
 
+  it("aggregates dependencies from nested npm workspace manifests", () => {
+    const signals = scanRepo(path.resolve(fixturesRoot, ".."));
+    expect(signals.packageJson?.devDependencies.vitest).toBe("^2.1.0");
+    expect(signals.packageJsons?.map((p) => p.path)).toContain("packages/cli/package.json");
+  });
+
+  it("assigns each package the nearest package-manager lock", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-managers-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ scripts: { test: "vitest" } }));
+      fs.writeFileSync(path.join(tmpDir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+      fs.mkdirSync(path.join(tmpDir, "packages", "web"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "packages", "web", "package.json"),
+        JSON.stringify({ scripts: { build: "vite build" } })
+      );
+      fs.mkdirSync(path.join(tmpDir, "standalone"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, "standalone", "package.json"),
+        JSON.stringify({ scripts: { test: "bun test" } })
+      );
+      fs.writeFileSync(path.join(tmpDir, "standalone", "bun.lock"), "");
+
+      const manifests = scanRepo(tmpDir).packageJsons!;
+      expect(manifests.find((item) => item.path === "package.json")?.packageManager).toBe("pnpm");
+      expect(manifests.find((item) => item.path === "packages/web/package.json")?.packageManager).toBe("pnpm");
+      expect(manifests.find((item) => item.path === "standalone/package.json")?.packageManager).toBe("bun");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("honors the packageManager field even without a lockfile", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-corepack-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ packageManager: "yarn@4.9.2" }));
+      const signals = scanRepo(tmpDir);
+      expect(signals.packageJson?.packageManager).toBe("yarn");
+      expect(signals.packageJsons?.[0].packageManager).toBe("yarn");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not descend into common generated dependency and build directories", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-ignored-"));
+    try {
+      for (const dir of ["target", "vendor", ".next", "coverage", ".gradle", ".dart_tool"]) {
+        fs.mkdirSync(path.join(tmpDir, dir), { recursive: true });
+        fs.writeFileSync(path.join(tmpDir, dir, "noise.txt"), "generated");
+      }
+      expect(scanRepo(tmpDir).files).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores its own generated files so repeated scans are stable", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-own-output-"));
+    try {
+      fs.mkdirSync(path.join(tmpDir, ".claude", "commands"), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "generated");
+      fs.writeFileSync(path.join(tmpDir, ".claude", "commands", "review.generated.md"), "generated");
+      fs.writeFileSync(path.join(tmpDir, "README.md"), "real");
+      expect(scanRepo(tmpDir).files).toEqual(["README.md"]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   describe("with CI workflows, tox.ini and composer scripts", () => {
     let tmpDir: string;
 

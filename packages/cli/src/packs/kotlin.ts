@@ -11,13 +11,17 @@ import {
 } from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
-  const source = signals.buildGradle;
+  const gradleSource = signals.buildGradle && /\bkotlin\b/i.test(signals.buildGradle)
+    ? signals.buildGradle
+    : undefined;
+  const mavenSource = signals.pomXml && /\bkotlin\b/i.test(signals.pomXml)
+    ? signals.pomXml
+    : undefined;
+  const source = gradleSource ?? mavenSource;
   if (!source) return null;
   // Modern Gradle projects often declare the Kotlin plugin via a version catalog alias
   // (`alias(libs.plugins.kotlin.android)`) rather than the literal `kotlin("jvm")` or
   // `org.jetbrains.kotlin` plugin id, so a plain word-boundary check is more robust.
-  if (!/\bkotlin\b/i.test(source)) return null;
-
   const framework: DetectionResult["framework"] = /ktor/i.test(source)
     ? { value: "ktor", confidence: "high" }
     : /com\.android\.application|com\.android\.library/i.test(source)
@@ -37,7 +41,13 @@ function detect(signals: RepoSignals): DetectionResult | null {
     language: "Kotlin",
     framework,
     testRunner,
-    packageManager: { value: "gradle", confidence: "high" },
+    packageManager: mavenSource && !gradleSource
+      ? signals.hasFile("mvnw") || signals.hasFile("mvnw.cmd")
+        ? { value: "maven wrapper", confidence: "high" }
+        : { value: "maven", confidence: "high" }
+      : signals.hasFile("gradlew") || signals.hasFile("gradlew.bat")
+      ? { value: "gradle wrapper", confidence: "high" }
+      : { value: "gradle", confidence: "high" },
   };
 }
 
@@ -66,8 +76,21 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   return {
-    summary: summarySentence(lang, "Kotlin", framework, "gradle"),
-    conventions: [t.style, runTestsConvention(lang, "`gradle test`"), t.nullsafety],
+    summary: summarySentence(lang, "Kotlin", framework, detection.packageManager?.value),
+    conventions: [
+      t.style,
+      runTestsConvention(
+        lang,
+        detection.packageManager?.value === "maven wrapper"
+          ? "`./mvnw test`"
+          : detection.packageManager?.value === "maven"
+          ? "`mvn test`"
+          : detection.packageManager?.value === "gradle wrapper"
+          ? "`./gradlew test`"
+          : "`gradle test`"
+      ),
+      t.nullsafety,
+    ],
     architectureNotes: t.arch,
   };
 }

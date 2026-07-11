@@ -1,8 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { RepoSignals, PackageJsonManifest, ComposerJsonManifest } from "./types.js";
+import type {
+  RepoSignals,
+  PackageJsonManifest,
+  LocatedPackageJsonManifest,
+  ComposerJsonManifest,
+  JsPackageManager,
+} from "./types.js";
 
-const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build", ".venv", "__pycache__"]);
+const IGNORED_DIRS = new Set([
+  "node_modules", ".git", ".hg", ".svn",
+  "dist", "build", "out", "target", "coverage", "vendor",
+  ".venv", "venv", ".tox", "__pycache__",
+  ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache",
+  ".gradle", ".dart_tool",
+]);
 const MAX_DEPTH = 4;
 
 function walk(rootPath: string): string[] {
@@ -20,6 +32,7 @@ function walk(rootPath: string): string[] {
         if (IGNORED_DIRS.has(entry.name)) continue;
         recurse(path.join(dir, entry.name), depth + 1);
       } else {
+        if (entry.name.includes(".generated.")) continue;
         results.push(path.relative(rootPath, path.join(dir, entry.name)));
       }
     }
@@ -40,6 +53,64 @@ function readJsonIfExists(filePath: string): Record<string, unknown> | undefined
     return JSON.parse(stripBom(fs.readFileSync(filePath, "utf-8")));
   } catch {
     return undefined;
+  }
+}
+
+function toPackageJsonManifest(
+  raw: Record<string, unknown>,
+  relativePath: string
+): LocatedPackageJsonManifest {
+  return {
+    path: relativePath.split(path.sep).join("/"),
+    name: raw.name as string | undefined,
+    dependencies: (raw.dependencies as Record<string, string>) ?? {},
+    devDependencies: (raw.devDependencies as Record<string, string>) ?? {},
+    scripts: (raw.scripts as Record<string, string>) ?? {},
+    moduleType: raw.type === "module" ? "module" : "commonjs",
+    packageManager: parsePackageManager(raw.packageManager),
+  };
+}
+
+function parsePackageManager(value: unknown): JsPackageManager | undefined {
+  if (typeof value !== "string") return undefined;
+  const name = value.trim().split("@")[0].toLowerCase();
+  return name === "npm" || name === "pnpm" || name === "yarn" || name === "bun" ? name : undefined;
+}
+
+const LOCK_MANAGERS: Readonly<Record<string, JsPackageManager>> = {
+  "package-lock.json": "npm",
+  "npm-shrinkwrap.json": "npm",
+  "pnpm-lock.yaml": "pnpm",
+  "yarn.lock": "yarn",
+  "bun.lock": "bun",
+  "bun.lockb": "bun",
+};
+
+function managerFromClosestLock(
+  manifestPath: string,
+  normalizedFiles: ReadonlySet<string>
+): JsPackageManager | undefined {
+  let dir = path.posix.dirname(manifestPath.split(path.sep).join("/"));
+  while (true) {
+    for (const [lockName, manager] of Object.entries(LOCK_MANAGERS)) {
+      const candidate = dir === "." ? lockName : `${dir}/${lockName}`;
+      if (normalizedFiles.has(candidate)) return manager;
+    }
+    if (dir === ".") return undefined;
+    dir = path.posix.dirname(dir);
+  }
+}
+
+function managerFromClosestDeclaration(
+  manifestPath: string,
+  declarations: ReadonlyMap<string, JsPackageManager>
+): JsPackageManager | undefined {
+  let dir = path.posix.dirname(manifestPath);
+  while (true) {
+    const manager = declarations.get(dir);
+    if (manager) return manager;
+    if (dir === ".") return undefined;
+    dir = path.posix.dirname(dir);
   }
 }
 
@@ -78,6 +149,8 @@ const NON_PROJECT_DIRS = new Set([
   "example",
   "benchmark",
   "benchmarks",
+  "fixture",
+  "fixtures",
 ]);
 
 function isUnderNonProjectDir(relativePath: string): boolean {
@@ -114,17 +187,49 @@ export function scanRepo(rootPath: string): RepoSignals {
   const files = walk(rootPath);
   const fileSet = new Set(files.map((f) => f.split(path.sep).join("/")));
 
-  const packageJsonPath = findFirst(files, "package.json");
-  const rawPackageJson = packageJsonPath
-    ? readJsonIfExists(path.join(rootPath, packageJsonPath))
-    : undefined;
-  const packageJson: PackageJsonManifest | undefined = rawPackageJson
+  // Keep every project package manifest, not only the root workspace manifest. Root
+  // package.json files are often workspace glue and contain none of the dependencies
+  // that reveal React/Vitest/etc. Manifests under docs/examples/tooling are excluded to
+  // avoid treating auxiliary demos, fixtures and documentation builds as the project.
+  const packageJsonPaths = files.filter(
+    (f) => path.basename(f) === "package.json" && !isUnderNonProjectDir(f)
+  );
+  const packageJsons = packageJsonPaths
+    .map((relativePath) => {
+      const raw = readJsonIfExists(path.join(rootPath, relativePath));
+      return raw ? toPackageJsonManifest(raw, relativePath) : undefined;
+    })
+    .filter((manifest): manifest is LocatedPackageJsonManifest => manifest !== undefined)
+    .sort((a, b) => {
+      const depth = a.path.split("/").length - b.path.split("/").length;
+      return depth || a.path.localeCompare(b.path);
+    });
+  const declaredManagers = new Map(
+    packageJsons
+      .filter((manifest): manifest is LocatedPackageJsonManifest & { packageManager: JsPackageManager } =>
+        manifest.packageManager !== undefined
+      )
+      .map((manifest) => [path.posix.dirname(manifest.path), manifest.packageManager] as const)
+  );
+  // A nested lock takes precedence over an ancestor workspace declaration because it
+  // denotes an independently installed package. Both lookups are O(path depth).
+  for (const manifest of packageJsons) {
+    if (manifest.packageManager) continue;
+    manifest.packageManager =
+      managerFromClosestLock(manifest.path, fileSet) ??
+      managerFromClosestDeclaration(manifest.path, declaredManagers);
+  }
+  const primaryPackageJson = packageJsons[0];
+  const packageJson: PackageJsonManifest | undefined = primaryPackageJson
     ? {
-        name: rawPackageJson.name as string | undefined,
-        dependencies: (rawPackageJson.dependencies as Record<string, string>) ?? {},
-        devDependencies: (rawPackageJson.devDependencies as Record<string, string>) ?? {},
-        scripts: (rawPackageJson.scripts as Record<string, string>) ?? {},
-        moduleType: rawPackageJson.type === "module" ? "module" : "commonjs",
+        name: primaryPackageJson.name,
+        dependencies: Object.assign({}, ...packageJsons.map((p) => p.dependencies)),
+        devDependencies: Object.assign({}, ...packageJsons.map((p) => p.devDependencies)),
+        // Root scripts remain the default command surface. Repo facts reads packageJsons
+        // directly and adds executable --prefix commands for nested packages.
+        scripts: primaryPackageJson.scripts,
+        moduleType: primaryPackageJson.moduleType,
+        packageManager: primaryPackageJson.packageManager,
       }
     : undefined;
 
@@ -203,6 +308,7 @@ export function scanRepo(rootPath: string): RepoSignals {
       fs.existsSync(path.join(rootPath, relativeDir)) &&
       fs.statSync(path.join(rootPath, relativeDir)).isDirectory(),
     packageJson,
+    packageJsons,
     pyprojectToml: pyprojectPath ? readTextIfExists(path.join(rootPath, pyprojectPath)) : undefined,
     requirementsTxt: requirementsPath
       ? readTextIfExists(path.join(rootPath, requirementsPath))

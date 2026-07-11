@@ -44,6 +44,27 @@ describe("jsTsPack", () => {
     expect(detection?.testRunner).toEqual({ value: "vitest", confidence: "high" });
   });
 
+  it.each(["npm", "pnpm", "yarn", "bun"] as const)(
+    "uses a resolved %s package manager signal",
+    (packageManager) => {
+      const detection = jsTsPack.detect(baseSignals({
+        packageJson: {
+          packageManager,
+          dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "module",
+        },
+      }));
+      expect(detection?.packageManager).toEqual({ value: packageManager, confidence: "high" });
+    }
+  );
+
+  it("detects Bun from either lock format", () => {
+    const detection = jsTsPack.detect(baseSignals({
+      files: ["apps/web/bun.lock"],
+      packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "module" },
+    }));
+    expect(detection?.packageManager).toEqual({ value: "bun", confidence: "high" });
+  });
+
   it("detects Next.js instead of plain React when both dependencies are present", () => {
     const detection = jsTsPack.detect(
       baseSignals({

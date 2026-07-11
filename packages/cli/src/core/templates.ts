@@ -29,6 +29,9 @@ function renderSection(entries: RenderEntry[], lang: Lang): string {
 
 const SOURCE_FILES: Record<CommandSource, string> = {
   npm: "package.json",
+  pnpm: "package.json",
+  yarn: "package.json",
+  bun: "package.json",
   composer: "composer.json",
   make: "Makefile",
   mix: "mix.exs",
@@ -39,11 +42,12 @@ export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
   const ui = UI[lang];
   const sections: string[] = [];
   if (facts.commands.length > 0) {
-    const lines = facts.commands.map((c) =>
-      c.detail && c.detail !== c.invocation
-        ? `- \`${c.invocation}\` → \`${c.detail}\` (${SOURCE_FILES[c.source]})`
-        : `- \`${c.invocation}\` (${SOURCE_FILES[c.source]})`
-    );
+    const lines = facts.commands.map((c) => {
+      const sourceFile = c.manifestPath ?? SOURCE_FILES[c.source];
+      return c.detail && c.detail !== c.invocation
+        ? `- \`${c.invocation}\` → \`${c.detail}\` (${sourceFile})`
+        : `- \`${c.invocation}\` (${sourceFile})`;
+    });
     for (const o of facts.omittedCommands) lines.push(`- ${ui.andMore(o.count, SOURCE_FILES[o.source])}`);
     sections.push([`## ${ui.sections.commands}`, "", ...lines].join("\n"));
   }

@@ -26,14 +26,21 @@ function detect(signals: RepoSignals): DetectionResult | null {
   // (`alias(libs.plugins.kotlin.android)`) rather than the literal `kotlin("jvm")` or
   // `org.jetbrains.kotlin` plugin id, so a plain word-boundary check on "kotlin" is
   // more robust than trying to match every DSL style.
-  if (/\bkotlin\b/i.test(source)) return null;
+  if (
+    (signals.buildGradle && /\bkotlin\b/i.test(signals.buildGradle)) ||
+    (signals.pomXml && /\bkotlin\b/i.test(signals.pomXml))
+  ) return null;
 
   const framework: DetectionField<string> = /spring/i.test(source)
     ? { value: "spring", confidence: "high" }
     : { value: "none", confidence: "low" };
 
   const packageManager: DetectionField<string> = signals.pomXml
-    ? { value: "maven", confidence: "high" }
+    ? signals.hasFile("mvnw") || signals.hasFile("mvnw.cmd")
+      ? { value: "maven wrapper", confidence: "high" }
+      : { value: "maven", confidence: "high" }
+    : signals.hasFile("gradlew") || signals.hasFile("gradlew.bat")
+    ? { value: "gradle wrapper", confidence: "high" }
     : { value: "gradle", confidence: "high" };
 
   const testRunner: DetectionField<string> = /junit/i.test(source)
@@ -67,7 +74,13 @@ const TEXTS: Record<Lang, { naming: string; deps: string; arch: string[]; review
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
-  const testCmd = detection.packageManager?.value === "maven" ? "mvn test" : "gradle test";
+  const testCmd = detection.packageManager?.value === "maven wrapper"
+    ? "./mvnw test"
+    : detection.packageManager?.value === "maven"
+    ? "mvn test"
+    : detection.packageManager?.value === "gradle wrapper"
+    ? "./gradlew test"
+    : "gradle test";
   return {
     summary: summarySentence(lang, "Java", framework, detection.packageManager?.value),
     conventions: [t.naming, runTestsConvention(lang, testCmd), t.deps],

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   extractNpmCommands,
+  extractJsPackageCommands,
   extractComposerCommands,
   extractMakeTargets,
   extractMixAliases,
@@ -48,6 +49,53 @@ describe("extractNpmCommands", () => {
       })
     );
     expect(entries).toEqual([]);
+  });
+
+  it("emits executable --prefix commands and origins for nested npm packages", () => {
+    const entries = extractNpmCommands(
+      baseSignals({
+        packageJsons: [
+          {
+            path: "packages/web/package.json",
+            dependencies: {}, devDependencies: {}, moduleType: "module",
+            scripts: { test: "vitest run", build: "vite build" },
+          },
+        ],
+      })
+    );
+    expect(entries).toContainEqual({
+      source: "npm",
+      invocation: "npm --prefix packages/web test",
+      detail: "vitest run",
+      manifestPath: "packages/web/package.json",
+    });
+    expect(entries).toContainEqual({
+      source: "npm",
+      invocation: "npm --prefix packages/web run build",
+      detail: "vite build",
+      manifestPath: "packages/web/package.json",
+    });
+  });
+
+  it.each([
+    ["pnpm", "pnpm --dir packages/web test", "pnpm --dir packages/web run build"],
+    ["yarn", "yarn --cwd packages/web run test", "yarn --cwd packages/web run build"],
+    ["bun", "bun --cwd packages/web run test", "bun --cwd packages/web run build"],
+  ] as const)("uses executable %s invocations for nested packages", (packageManager, testCommand, buildCommand) => {
+    const entries = extractJsPackageCommands(
+      baseSignals({
+        packageJsons: [{
+          path: "packages/web/package.json",
+          packageManager,
+          dependencies: {}, devDependencies: {}, moduleType: "module",
+          scripts: { test: "vitest run", build: "vite build" },
+        }],
+      })
+    );
+    expect(entries.map(({ source, invocation }) => ({ source, invocation }))).toEqual([
+      { source: packageManager, invocation: testCommand },
+      { source: packageManager, invocation: buildCommand },
+    ]);
   });
 });
 

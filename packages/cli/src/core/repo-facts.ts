@@ -1,22 +1,66 @@
 import path from "node:path";
 import { parse } from "yaml";
 import { UI, type Lang } from "./i18n.js";
-import type { CiCommand, CommandEntry, CommandSource, DirEntry, RepoFacts, RepoSignals } from "./types.js";
+import type {
+  CiCommand,
+  CommandEntry,
+  CommandSource,
+  DirEntry,
+  JsPackageManager,
+  RepoFacts,
+  RepoSignals,
+} from "./types.js";
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
 
-export function extractNpmCommands(signals: RepoSignals): CommandEntry[] {
-  const scripts = signals.packageJson?.scripts ?? {};
+export function extractJsPackageCommands(signals: RepoSignals): CommandEntry[] {
   const entries: CommandEntry[] = [];
-  for (const [name, body] of Object.entries(scripts)) {
-    if (typeof body !== "string" || body.trim() === "") continue;
-    entries.push({
-      source: "npm",
-      invocation: NPM_DIRECT_LIFECYCLE.has(name) ? `npm ${name}` : `npm run ${name}`,
-      detail: body.trim(),
-    });
+  const locatedManifests = signals.packageJsons ?? [];
+  const hasLocatedManifests = locatedManifests.length > 0;
+  const manifests = hasLocatedManifests
+    ? locatedManifests
+    : signals.packageJson
+    ? [{ ...signals.packageJson, path: "package.json" }]
+    : [];
+  for (const manifest of manifests) {
+    const packageDir = path.posix.dirname(manifest.path);
+    const manager = manifest.packageManager ?? signals.packageJson?.packageManager ?? "npm";
+    for (const [name, body] of Object.entries(manifest.scripts)) {
+      if (typeof body !== "string" || body.trim() === "") continue;
+      entries.push({
+        source: manager,
+        invocation: jsScriptInvocation(manager, packageDir, name),
+        detail: body.trim(),
+        ...(hasLocatedManifests ? { manifestPath: manifest.path } : {}),
+      });
+    }
   }
   return entries;
+}
+
+/** @deprecated Conservado como alias de API; también devuelve comandos pnpm/Yarn/Bun. */
+export const extractNpmCommands = extractJsPackageCommands;
+
+function jsScriptInvocation(manager: JsPackageManager, packageDir: string, script: string): string {
+  const name = quoteShellArg(script);
+  if (manager === "npm") {
+    const prefix = packageDir === "." ? "npm" : `npm --prefix ${quoteShellArg(packageDir)}`;
+    return NPM_DIRECT_LIFECYCLE.has(script) ? `${prefix} ${name}` : `${prefix} run ${name}`;
+  }
+  if (manager === "pnpm") {
+    const prefix = packageDir === "." ? "pnpm" : `pnpm --dir ${quoteShellArg(packageDir)}`;
+    return NPM_DIRECT_LIFECYCLE.has(script) ? `${prefix} ${name}` : `${prefix} run ${name}`;
+  }
+  if (manager === "yarn") {
+    const prefix = packageDir === "." ? "yarn" : `yarn --cwd ${quoteShellArg(packageDir)}`;
+    return `${prefix} run ${name}`;
+  }
+  const prefix = packageDir === "." ? "bun" : `bun --cwd ${quoteShellArg(packageDir)}`;
+  return `${prefix} run ${name}`;
+}
+
+function quoteShellArg(value: string): string {
+  return /\s/.test(value) ? JSON.stringify(value) : value;
 }
 
 export function extractMakeTargets(signals: RepoSignals): CommandEntry[] {
@@ -181,7 +225,7 @@ export function extractStructure(signals: RepoSignals, lang: Lang): DirEntry[] {
 
 export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
   const allCommands = [
-    ...extractNpmCommands(signals),
+    ...extractJsPackageCommands(signals),
     ...extractComposerCommands(signals),
     ...extractMakeTargets(signals),
     ...extractMixAliases(signals),

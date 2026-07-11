@@ -36,6 +36,29 @@ describe("javaPack", () => {
     expect(detection).toBeNull();
   });
 
+  it("defers Maven Kotlin builds to the Kotlin pack", () => {
+    const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>kotlin-maven-plugin</artifactId>" }));
+    expect(detection).toBeNull();
+  });
+
+  it("uses the Gradle wrapper when it is available", () => {
+    const detection = javaPack.detect(baseSignals({
+      buildGradle: "plugins { id 'java' }",
+      hasFile: (file) => file === "gradlew",
+    }));
+    expect(detection?.packageManager?.value).toBe("gradle wrapper");
+    expect(javaPack.rules(detection!, "en").conventions.join("\n")).toContain("./gradlew test");
+  });
+
+  it("uses the Maven wrapper when it is available", () => {
+    const detection = javaPack.detect(baseSignals({
+      pomXml: "<artifactId>plain-app</artifactId>",
+      hasFile: (file) => file === "mvnw",
+    }));
+    expect(detection?.packageManager?.value).toBe("maven wrapper");
+    expect(javaPack.rules(detection!, "en").conventions.join("\n")).toContain("./mvnw test");
+  });
+
   it("reports testRunner as unknown, not junit, when junit is not referenced", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }));
     expect(detection?.testRunner).toEqual({ value: "unknown", confidence: "low" });

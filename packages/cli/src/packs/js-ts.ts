@@ -53,6 +53,8 @@ function detectFromDeps(
 function detect(signals: RepoSignals): DetectionResult | null {
   if (!signals.packageJson) return null;
   const allDeps = { ...signals.packageJson.dependencies, ...signals.packageJson.devDependencies };
+  const hasAnyFileNamed = (name: string) =>
+    signals.files.some((file) => file.split(/[\\/]/).pop() === name);
 
   const framework = detectFromDeps(allDeps, FRAMEWORKS) ?? {
     value: "none",
@@ -63,16 +65,34 @@ function detect(signals: RepoSignals): DetectionResult | null {
     confidence: "low" as const,
   };
   const linter = detectFromDeps(allDeps, LINTERS) ?? { value: "unknown", confidence: "low" as const };
-  const packageManager: DetectionField<string> = signals.hasFile("pnpm-lock.yaml")
+  const packageManager: DetectionField<string> = signals.packageJson.packageManager
+    ? { value: signals.packageJson.packageManager, confidence: "high" }
+    : signals.hasFile("bun.lock") || signals.hasFile("bun.lockb")
+    ? { value: "bun", confidence: "high" }
+    : signals.hasFile("pnpm-lock.yaml")
     ? { value: "pnpm", confidence: "high" }
     : signals.hasFile("yarn.lock")
     ? { value: "yarn", confidence: "high" }
-    : signals.hasFile("package-lock.json")
+    : signals.hasFile("package-lock.json") || signals.hasFile("npm-shrinkwrap.json")
+    ? { value: "npm", confidence: "high" }
+    : hasAnyFileNamed("bun.lock") || hasAnyFileNamed("bun.lockb")
+    ? { value: "bun", confidence: "high" }
+    : hasAnyFileNamed("pnpm-lock.yaml")
+    ? { value: "pnpm", confidence: "high" }
+    : hasAnyFileNamed("yarn.lock")
+    ? { value: "yarn", confidence: "high" }
+    : hasAnyFileNamed("package-lock.json") || hasAnyFileNamed("npm-shrinkwrap.json")
     ? { value: "npm", confidence: "high" }
     : { value: "npm", confidence: "low" };
 
-  const usesTypeScript = Boolean(allDeps.typescript) || signals.hasFile("tsconfig.json");
-  const moduleFormat = signals.packageJson.moduleType;
+  const usesTypeScript =
+    Boolean(allDeps.typescript) || signals.hasFile("tsconfig.json") || hasAnyFileNamed("tsconfig.json");
+  const moduleTypes = new Set(
+    (signals.packageJsons?.length ? signals.packageJsons : [signals.packageJson]).map((p) => p.moduleType)
+  );
+  // Mixed ESM/CommonJS workspaces should not receive a repo-wide rule that is wrong
+  // for half of the packages.
+  const moduleFormat = moduleTypes.size === 1 ? [...moduleTypes][0] : undefined;
 
   return {
     packId: "js-ts",
@@ -121,7 +141,9 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const conventions: string[] = [];
   if (detection.usesTypeScript) conventions.push(t.tsStrict);
   conventions.push(runTestsConvention(lang, runner ?? unknownRunnerLabel(lang)));
-  conventions.push(detection.moduleFormat === "module" ? t.esModules : t.commonJs);
+  if (detection.moduleFormat) {
+    conventions.push(detection.moduleFormat === "module" ? t.esModules : t.commonJs);
+  }
   return {
     summary: summarySentence(lang, detection.usesTypeScript ? "TypeScript" : "JavaScript", framework),
     conventions,

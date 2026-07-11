@@ -38,6 +38,35 @@ describe("kotlinPack", () => {
     expect(detection).not.toBeNull();
   });
 
+  it("detects Kotlin + Spring projects built with Maven", () => {
+    const pom = `<project><build><plugins><plugin><artifactId>kotlin-maven-plugin</artifactId></plugin></plugins></build>
+      <dependency><artifactId>spring-boot-starter-web</artifactId></dependency>
+      <dependency><artifactId>junit-jupiter</artifactId></dependency></project>`;
+    const detection = kotlinPack.detect(baseSignals({ pomXml: pom }));
+    expect(detection?.packageManager).toEqual({ value: "maven", confidence: "high" });
+    expect(detection?.framework).toEqual({ value: "spring", confidence: "high" });
+    expect(detection?.testRunner).toEqual({ value: "junit", confidence: "high" });
+    expect(kotlinPack.rules(detection!, "en").conventions.join("\n")).toContain("mvn test");
+  });
+
+  it("prefers the Gradle wrapper command when the wrapper is present", () => {
+    const detection = kotlinPack.detect(baseSignals({
+      buildGradle: 'plugins { kotlin("jvm") }',
+      hasFile: (file) => file === "gradlew",
+    }));
+    expect(detection?.packageManager?.value).toBe("gradle wrapper");
+    expect(kotlinPack.rules(detection!, "en").conventions.join("\n")).toContain("./gradlew test");
+  });
+
+  it("prefers the Maven wrapper command for Maven Kotlin projects", () => {
+    const detection = kotlinPack.detect(baseSignals({
+      pomXml: "<artifactId>kotlin-maven-plugin</artifactId>",
+      hasFile: (file) => file === "mvnw",
+    }));
+    expect(detection?.packageManager?.value).toBe("maven wrapper");
+    expect(kotlinPack.rules(detection!, "en").conventions.join("\n")).toContain("./mvnw test");
+  });
+
   it("marks framework low confidence when no known framework is found", () => {
     const detection = kotlinPack.detect(baseSignals({ buildGradle: 'plugins {\n    kotlin("jvm")\n}' }));
     expect(detection?.framework).toEqual({ value: "none", confidence: "low" });

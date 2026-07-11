@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { detectAvailableAssistants, polishWithAssistant } from "../src/core/llm-bridge.js";
+import { detectAvailableAssistants, polishFilesWithAssistant, polishWithAssistant } from "../src/core/llm-bridge.js";
 
 describe("detectAvailableAssistants", () => {
   it("returns both assistants when both exec calls succeed", async () => {
@@ -44,5 +44,34 @@ describe("polishWithAssistant", () => {
     const execFn = vi.fn().mockRejectedValue(new Error("auth error"));
     const result = await polishWithAssistant("codex", "raw content", execFn);
     expect(result).toBe("raw content");
+  });
+});
+
+describe("polishFilesWithAssistant", () => {
+  const files = [
+    { path: "CLAUDE.generated.md", content: "raw one" },
+    { path: "AGENTS.generated.md", content: "raw two" },
+  ];
+
+  it("polishes a normal run with one assistant process", async () => {
+    const response = files.map((file) => ({ ...file, content: `polished ${file.content}` }));
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(response), exitCode: 0 });
+    const result = await polishFilesWithAssistant("claude", files, execFn, "en");
+    expect(execFn).toHaveBeenCalledTimes(1);
+    expect(result.map((f) => f.content)).toEqual(["polished raw one", "polished raw two"]);
+    expect(execFn.mock.calls[0][2]).toContain("CLAUDE.generated.md");
+  });
+
+  it("accepts JSON wrapped in a Markdown fence", async () => {
+    const execFn = vi.fn().mockResolvedValue({
+      stdout: `\`\`\`json\n${JSON.stringify(files)}\n\`\`\``,
+      exitCode: 0,
+    });
+    await expect(polishFilesWithAssistant("codex", files, execFn)).resolves.toEqual(files);
+  });
+
+  it("keeps every original file if the assistant changes paths or returns invalid JSON", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: '[{"path":"wrong","content":"x"}]', exitCode: 0 });
+    await expect(polishFilesWithAssistant("codex", files, execFn)).resolves.toEqual(files);
   });
 });

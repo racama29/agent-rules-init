@@ -59,6 +59,7 @@ export interface UiTexts {
   question: (fieldLabel: string, language: string) => string;
   fieldLabels: { framework: string; testRunner: string; linter: string; packageManager: string };
   usage: string;
+  automationUsage: string;
   unknownOption: (flag: string) => string;
   invalidLang: (value: string) => string;
   noTtyWarning: string;
@@ -67,6 +68,7 @@ export interface UiTexts {
   polishConfirm: (assistant: string) => string;
   polishFailed: (assistant: string, error: string) => string;
   polishPrompt: (content: string) => string;
+  polishBatchPrompt: (filesJson: string) => string;
   fileSkipped: (path: string) => string;
   outroWritten: string;
   outroNothing: string;
@@ -104,6 +106,11 @@ Uso:
 
 Los archivos se crean siempre con sufijo .generated y nunca sobrescriben nada existente:
 revisa su contenido y quita el sufijo para activarlos.`,
+    automationUsage: `Automatización:
+  --dry-run         renderiza y muestra archivos sin escribir
+  --check           termina con error si faltan archivos generados; nunca escribe
+  --json            emite un único resultado JSON legible por máquinas
+  --non-interactive omite preguntas y el pulido con IA`,
     unknownOption: (flag) => `Opción no reconocida: ${flag}`,
     invalidLang: (value) => `Valor de --lang no válido: "${value}" (usa "es" o "en").`,
     noTtyWarning:
@@ -117,6 +124,10 @@ revisa su contenido y quita el sufijo para activarlos.`,
       `No se pudo pulir el contenido con ${assistant}, se mantiene el original: ${error}`,
     polishPrompt: (content) =>
       `Pule la redacción del siguiente documento de instrucciones para un agente de IA, sin cambiar su significado ni estructura. Devuelve únicamente el documento pulido, sin comentarios ni explicaciones adicionales:\n\n${content}`,
+    polishBatchPrompt: (filesJson) =>
+      "Pule la redacción de estos archivos de instrucciones sin cambiar su significado, estructura, rutas ni formato Markdown. " +
+      "Devuelve únicamente un array JSON válido con exactamente los mismos objetos path/content y en el mismo orden, sin bloque de código ni comentarios. " +
+      `Entrada JSON:\n${filesJson}`,
     fileSkipped: (path) => `${path}: ya existía, se conserva sin cambios.`,
     outroWritten:
       "Revisa los archivos *.generated.* y, cuando estés conforme, quita el sufijo " +
@@ -174,6 +185,11 @@ Usage:
 
 Files are always created with the .generated suffix and never overwrite anything:
 review their content and drop the suffix to activate them.`,
+    automationUsage: `Automation:
+  --dry-run         render and print files without writing
+  --check           exit non-zero if generated files are missing; never write
+  --json            emit a single machine-readable JSON result
+  --non-interactive skip questions and AI polishing`,
     unknownOption: (flag) => `Unknown option: ${flag}`,
     invalidLang: (value) => `Invalid --lang value: "${value}" (use "es" or "en").`,
     noTtyWarning:
@@ -186,6 +202,10 @@ review their content and drop the suffix to activate them.`,
     polishFailed: (assistant, error) => `Couldn't polish the content with ${assistant}, keeping the original: ${error}`,
     polishPrompt: (content) =>
       `Polish the wording of the following instructions document for an AI agent, without changing its meaning or structure. Return only the polished document, with no extra comments or explanations:\n\n${content}`,
+    polishBatchPrompt: (filesJson) =>
+      "Polish the wording of these instruction files without changing their meaning, structure, paths, or Markdown format. " +
+      "Return only a valid JSON array with exactly the same path/content objects in the same order, without a code fence or commentary. " +
+      `Input JSON:\n${filesJson}`,
     fileSkipped: (path) => `${path}: already existed, left unchanged.`,
     outroWritten:
       "Review the *.generated.* files and, once you are happy with them, drop the " +

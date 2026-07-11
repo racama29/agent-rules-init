@@ -16,15 +16,15 @@ export function writeGeneratedFiles(rootPath: string, files: GeneratedFile[]): W
   return files.map(({ path: relativePath, content }) => {
     const absolutePath = path.join(rootPath, relativePath);
     try {
-      // An already-existing file is the expected outcome on a re-run (the tool's
-      // no-overwrite guarantee), not a failure — report it as skipped, exit 0.
-      if (fs.existsSync(absolutePath)) {
-        return { path: relativePath, status: "skipped" };
-      }
       fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-      fs.writeFileSync(absolutePath, content);
+      // `wx` makes the no-overwrite guarantee atomic: even if another process creates
+      // the file between directory creation and this call, Node returns EEXIST.
+      fs.writeFileSync(absolutePath, content, { flag: "wx" });
       return { path: relativePath, status: "written" };
     } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        return { path: relativePath, status: "skipped" };
+      }
       return { path: relativePath, status: "error", error: (err as Error).message };
     }
   });

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { UI, type Lang } from "./i18n.js";
+import type { GeneratedFile } from "./writer.js";
 
 export type AssistantId = "claude" | "codex";
 
@@ -61,4 +62,62 @@ export async function polishWithAssistant(
     console.warn(UI[lang].polishFailed(assistant, (err as Error).message));
     return content;
   }
+}
+
+const MAX_POLISH_BATCH_CHARS = 60_000;
+
+function makeBatches(files: GeneratedFile[]): GeneratedFile[][] {
+  const batches: GeneratedFile[][] = [];
+  let current: GeneratedFile[] = [];
+  let currentSize = 2;
+  for (const file of files) {
+    const size = JSON.stringify(file).length + 1;
+    if (current.length > 0 && currentSize + size > MAX_POLISH_BATCH_CHARS) {
+      batches.push(current);
+      current = [];
+      currentSize = 2;
+    }
+    current.push(file);
+    currentSize += size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+function parsePolishedBatch(stdout: string, originals: GeneratedFile[]): GeneratedFile[] {
+  const trimmed = stdout.trim();
+  const withoutFence = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1] ?? trimmed;
+  const parsed: unknown = JSON.parse(withoutFence);
+  if (!Array.isArray(parsed) || parsed.length !== originals.length) {
+    throw new Error("assistant returned a different number of files");
+  }
+  return parsed.map((value, index) => {
+    if (!value || typeof value !== "object") throw new Error("assistant returned an invalid file entry");
+    const entry = value as Record<string, unknown>;
+    if (entry.path !== originals[index].path || typeof entry.content !== "string") {
+      throw new Error("assistant changed a path or returned invalid content");
+    }
+    return { path: originals[index].path, content: entry.content };
+  });
+}
+
+/** Polishes typical runs in one assistant process, splitting only very large outputs. */
+export async function polishFilesWithAssistant(
+  assistant: AssistantId,
+  files: GeneratedFile[],
+  execFn: ExecFn = defaultExecFn,
+  lang: Lang = "es"
+): Promise<GeneratedFile[]> {
+  const polished: GeneratedFile[] = [];
+  for (const batch of makeBatches(files)) {
+    try {
+      const input = UI[lang].polishBatchPrompt(JSON.stringify(batch));
+      const result = await execFn(assistant, ["-p"], input);
+      polished.push(...parsePolishedBatch(result.stdout, batch));
+    } catch (err) {
+      console.warn(UI[lang].polishFailed(assistant, (err as Error).message));
+      polished.push(...batch);
+    }
+  }
+  return polished;
 }

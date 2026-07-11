@@ -1,11 +1,19 @@
 import type { Lang } from "./i18n.js";
 
+export type JsPackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
 export interface PackageJsonManifest {
   name?: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
   scripts: Record<string, string>;
   moduleType: "module" | "commonjs";
+  /** Gestor aplicable al manifiesto, declarado en packageManager o inferido por el lock más cercano. */
+  packageManager?: JsPackageManager;
+}
+
+export interface LocatedPackageJsonManifest extends PackageJsonManifest {
+  path: string;
 }
 
 export interface ComposerJsonManifest {
@@ -21,6 +29,7 @@ export interface RepoSignals {
   hasFile: (relativePath: string) => boolean;
   hasDir: (relativeDir: string) => boolean;
   packageJson?: PackageJsonManifest;
+  packageJsons?: LocatedPackageJsonManifest[];
   pyprojectToml?: string;
   requirementsTxt?: string;
   environmentYml?: string;
@@ -73,12 +82,13 @@ export interface PromptTemplate {
   body: string;
 }
 
-export type CommandSource = "npm" | "composer" | "make" | "mix" | "tox";
+export type CommandSource = JsPackageManager | "composer" | "make" | "mix" | "tox";
 
 export interface CommandEntry {
   source: CommandSource;
-  invocation: string; // "npm test", "composer lint", "make docs", "mix setup", "tox -e py311"
-  detail?: string; // cuerpo del script cuando es legible (npm/composer)
+  invocation: string; // "pnpm test", "composer lint", "make docs", "mix setup", "tox -e py311"
+  detail?: string; // cuerpo del script cuando es legible (JS/composer)
+  manifestPath?: string; // manifiesto concreto cuando hay varios (p. ej. un workspace npm)
 }
 
 export interface DirEntry {
