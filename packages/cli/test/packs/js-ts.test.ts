@@ -13,6 +13,17 @@ function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
 }
 
 describe("jsTsPack", () => {
+  it("recognizes framework source packages without claiming a self-dependency", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: {
+          name: "express", dependencies: {}, devDependencies: { mocha: "^11" },
+          scripts: {}, moduleType: "commonjs",
+        },
+      })
+    );
+    expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
+  });
   it("returns null when there is no package.json", () => {
     expect(jsTsPack.detect(baseSignals({}))).toBeNull();
   });
@@ -63,6 +74,29 @@ describe("jsTsPack", () => {
       packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "module" },
     }));
     expect(detection?.packageManager).toEqual({ value: "bun", confidence: "high" });
+  });
+
+  it("infers a single package manager consistently used by CI", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs" },
+        githubWorkflows: [{
+          path: ".github/workflows/ci.yml",
+          content: "steps:\n  - run: npm ci\n  - run: |\n      npm test\n",
+        }],
+      })
+    );
+    expect(detection?.packageManager).toEqual({ value: "npm", confidence: "high" });
+  });
+
+  it("does not guess when CI uses multiple package managers", () => {
+    const detection = jsTsPack.detect(
+      baseSignals({
+        packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs" },
+        githubWorkflows: [{ path: ".github/workflows/ci.yml", content: "npm test\npnpm test\n" }],
+      })
+    );
+    expect(detection?.packageManager).toEqual({ value: "npm", confidence: "low" });
   });
 
   it("detects Next.js instead of plain React when both dependencies are present", () => {

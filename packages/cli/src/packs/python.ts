@@ -57,16 +57,29 @@ function extractPyprojectDependencySections(pyproject: string): string {
   return sections.length > 0 ? sections.join("\n") : pyproject;
 }
 
+function isFrameworkSourceProject(pyproject: string): boolean {
+  const projectBlock = pyproject.match(/(?:^|\n)\[project\]([\s\S]*?)(?:\n\[|$)/)?.[1];
+  const name = projectBlock?.match(/(?:^|\n)\s*name\s*=\s*["']([^"']+)["']/i)?.[1].toLowerCase();
+  return FRAMEWORKS.some(([framework]) => framework === name);
+}
+
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pyprojectToml ?? signals.requirementsTxt ?? signals.environmentYml;
   if (!source) return null;
 
   const searchText = signals.pyprojectToml ? extractPyprojectDependencySections(signals.pyprojectToml) : source;
 
-  const framework = findIn(searchText, FRAMEWORKS) ?? { value: "none", confidence: "low" as const };
+  const framework = findIn(searchText, FRAMEWORKS) ?? {
+    value: "none",
+    confidence: signals.pyprojectToml && isFrameworkSourceProject(signals.pyprojectToml)
+      ? "high" as const
+      : "low" as const,
+  };
   const testRunner = findIn(searchText, TEST_RUNNERS) ?? { value: "unknown", confidence: "low" as const };
   const packageManager: DetectionField<string> = signals.environmentYml
     ? { value: "conda", confidence: "high" }
+    : signals.hasFile("uv.lock")
+    ? { value: "uv", confidence: "high" }
     : signals.hasFile("poetry.lock")
     ? { value: "poetry", confidence: "high" }
     : signals.pyprojectToml

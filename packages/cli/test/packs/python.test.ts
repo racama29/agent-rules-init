@@ -34,11 +34,19 @@ describe("pythonPack", () => {
     expect(detection?.packageManager).toEqual({ value: "conda", confidence: "high" });
   });
 
-  it("does not mistake the package's own name for a framework dependency (e.g. Flask's own pyproject.toml)", () => {
+  it("recognizes framework source repos without claiming they depend on themselves", () => {
     const flaskOwnPyproject = `[project]\nname = "flask"\ndependencies = [\n    "blinker>=1.9.0",\n    "click>=8.1.3",\n    "werkzeug>=3.1.0",\n]\n\n[dependency-groups]\ndev = [\n    "pytest",\n    "ruff",\n]\n`;
     const detection = pythonPack.detect(baseSignals({ pyprojectToml: flaskOwnPyproject }));
-    expect(detection?.framework).toEqual({ value: "none", confidence: "low" });
+    expect(detection?.framework).toEqual({ value: "none", confidence: "high" });
     expect(detection?.testRunner).toEqual({ value: "pytest", confidence: "high" });
+  });
+
+  it("detects uv from uv.lock", () => {
+    const detection = pythonPack.detect(baseSignals({
+      pyprojectToml: 'dependencies = ["pytest"]',
+      hasFile: (file) => file === "uv.lock",
+    }));
+    expect(detection?.packageManager).toEqual({ value: "uv", confidence: "high" });
   });
 
   it("marks framework low confidence when nothing recognizable is found", () => {

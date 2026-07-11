@@ -74,7 +74,7 @@ All generated content and CLI messages are available in **English and Spanish**.
 | Stack | Detected frameworks | Status |
 |---|---|---|
 | JavaScript / TypeScript | React, Next.js, Vue, Angular, Svelte, Express, NestJS, Fastify, Koa | ✅ stable |
-| Python | FastAPI, Django, Flask (pip, Poetry or Conda via `environment.yml`) | ✅ stable |
+| Python | FastAPI, Django, Flask (pip, uv, Poetry or Conda via `environment.yml`) | ✅ stable |
 | Java | Spring (Maven or Gradle) | ✅ stable |
 | PHP | Laravel, Symfony, CodeIgniter | ✅ stable |
 | Ruby | Rails, Sinatra | ✅ stable |

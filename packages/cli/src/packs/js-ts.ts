@@ -50,15 +50,30 @@ function detectFromDeps(
   return undefined;
 }
 
+function detectPackageManagerFromCi(signals: RepoSignals): DetectionField<string> | undefined {
+  const managers = new Set<string>();
+  for (const workflow of signals.githubWorkflows ?? []) {
+    for (const rawLine of workflow.content.split(/\r?\n/)) {
+      const command = rawLine.trim().replace(/^(?:-\s*)?run:\s*(?:[|>]\s*)?/, "").trim();
+      const manager = /^(npm|pnpm|yarn|bun)\b/.exec(command)?.[1];
+      if (manager) managers.add(manager);
+    }
+  }
+  return managers.size === 1 ? { value: [...managers][0], confidence: "high" } : undefined;
+}
+
 function detect(signals: RepoSignals): DetectionResult | null {
   if (!signals.packageJson) return null;
   const allDeps = { ...signals.packageJson.dependencies, ...signals.packageJson.devDependencies };
   const hasAnyFileNamed = (name: string) =>
     signals.files.some((file) => file.split(/[\\/]/).pop() === name);
 
+  const isFrameworkSource = Boolean(
+    signals.packageJson.name && Object.prototype.hasOwnProperty.call(FRAMEWORKS, signals.packageJson.name)
+  );
   const framework = detectFromDeps(allDeps, FRAMEWORKS) ?? {
     value: "none",
-    confidence: "low" as const,
+    confidence: isFrameworkSource ? "high" as const : "low" as const,
   };
   const testRunner = detectFromDeps(allDeps, TEST_RUNNERS) ?? {
     value: "unknown",
@@ -83,7 +98,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
     ? { value: "yarn", confidence: "high" }
     : hasAnyFileNamed("package-lock.json") || hasAnyFileNamed("npm-shrinkwrap.json")
     ? { value: "npm", confidence: "high" }
-    : { value: "npm", confidence: "low" };
+    : detectPackageManagerFromCi(signals) ?? { value: "npm", confidence: "low" };
 
   const usesTypeScript =
     Boolean(allDeps.typescript) || signals.hasFile("tsconfig.json") || hasAnyFileNamed("tsconfig.json");
