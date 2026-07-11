@@ -125,7 +125,12 @@ function fromSignals(signals: RepoSignals): CanonicalCommand[] {
   } else if (signals.toxIni) {
     out.push({ kind: "test", command: "tox", source: "tox.ini", confidence: "high", scope: "." });
   } else if (hasPytest) {
-    out.push({ kind: "test", command: "pytest", source: "pyproject.toml", confidence: "low", scope: "." });
+    const source = signals.pyprojectToml
+      ? "pyproject.toml"
+      : signals.requirementsTxt
+      ? "requirements.txt"
+      : "environment.yml";
+    out.push({ kind: "test", command: "pytest", source, confidence: "low", scope: "." });
   }
 
   return out;

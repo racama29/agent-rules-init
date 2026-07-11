@@ -30,8 +30,8 @@ export function renderProjectUnitAgents(
   const rawDetection = jsTsPack.detect(unit.signals);
   if (!rawDetection) return null;
   const detection = applyOverrides(rawDetection, overrides);
-  const ruleSet = jsTsPack.rules(detection, lang);
   const facts = buildRepoFacts(unit.signals, lang);
+  const ruleSet = jsTsPack.rules(detection, lang, { facts });
   return {
     path: `${unit.path}/AGENTS.generated.md`,
     content: renderAgentsMd([{ detection, ruleSet }], facts, lang),

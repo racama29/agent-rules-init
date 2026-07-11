@@ -83,4 +83,45 @@ describe("buildPackageUnits", () => {
     expect(filtered.packageJson?.dependencies.express).toBeUndefined();
     expect(filtered.files).not.toContain("legacy/api/package.json");
   });
+
+  it("preserves the root manifest's main entrypoint when reconstructing the aggregated packageJson", () => {
+    const files = ["package.json", "apps/web/package.json", "legacy/api/package.json"];
+    const signals: RepoSignals = {
+      rootPath: "/repo", files,
+      hasFile: (file) => files.includes(file), hasDir: () => false,
+      packageJsons: [
+        {
+          path: "package.json", main: "dist/index.js",
+          dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs",
+        },
+        {
+          path: "apps/web/package.json", dependencies: { react: "^19" },
+          devDependencies: {}, scripts: {}, moduleType: "module",
+        },
+        {
+          path: "legacy/api/package.json", dependencies: { express: "^5" },
+          devDependencies: {}, scripts: {}, moduleType: "commonjs",
+        },
+      ],
+    };
+    const filtered = applyProjectExcludes(signals, ["legacy/**"]);
+    expect(filtered.packageJson?.main).toBe("dist/index.js");
+  });
+
+  it("passes unit-scoped facts as ctx so nested rules cite the canonical script invocation", () => {
+    const files = ["package.json", "apps/web/package.json", "apps/web/src/index.ts"];
+    const signals: RepoSignals = {
+      rootPath: "/repo", files,
+      hasFile: (file) => files.includes(file.replace(/\\/g, "/")),
+      hasDir: (dir) => files.some((file) => file.startsWith(`${dir.replace(/\\/g, "/")}/`)),
+      packageJsons: [{
+        path: "apps/web/package.json", dependencies: {},
+        devDependencies: { vitest: "^3" }, scripts: { test: "vitest run" }, moduleType: "module",
+      }],
+    };
+    const unit = buildPackageUnits(signals)[0];
+    const output = renderProjectUnitAgents(unit, "en");
+    expect(output?.content).toContain("Run the tests with npm test before finishing a task.");
+    expect(output?.content).not.toContain("Run the tests with vitest before finishing a task.");
+  });
 });

@@ -96,4 +96,28 @@ describe("selectCanonicalCommands language fallbacks", () => {
     const result = selectCanonicalCommands(signals, [], ci);
     expect(result[0].command).toBe("./mvnw -B verify");
   });
+
+  it("uses the Gradle wrapper when present", () => {
+    const signals = baseSignals({ buildGradle: "plugins { id 'java' }", hasFile: (p) => p === "gradlew" });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "./gradlew test", source: "gradlew", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("prefers poetry run pytest when poetry.lock and pytest are present", () => {
+    const signals = baseSignals({
+      pyprojectToml: '[project]\nname = "x"\n[project.optional-dependencies]\ndev = ["pytest"]\n',
+      hasFile: (p) => p === "poetry.lock",
+    });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "poetry run pytest", source: "poetry.lock", confidence: "high", scope: "." },
+    ]);
+  });
+
+  it("attributes the low-confidence pytest fallback to requirements.txt when that's the source", () => {
+    const signals = baseSignals({ requirementsTxt: "pytest\nflask\n" });
+    expect(selectCanonicalCommands(signals, [], none)).toEqual([
+      { kind: "test", command: "pytest", source: "requirements.txt", confidence: "low", scope: "." },
+    ]);
+  });
 });

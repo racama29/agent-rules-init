@@ -47,6 +47,7 @@ export function applyProjectExcludes(signals: RepoSignals, patterns: readonly st
   const packageJson = primary
     ? {
         name: primary.name,
+        main: primary.main,
         dependencies: Object.assign({}, ...packageJsons.map((manifest) => manifest.dependencies)),
         devDependencies: Object.assign({}, ...packageJsons.map((manifest) => manifest.devDependencies)),
         scripts: primary.scripts,
