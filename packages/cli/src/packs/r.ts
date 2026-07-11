@@ -5,8 +5,6 @@ import {
   runTestsConvention,
   summarySentence,
   testingBody,
-  unknownFrameworkLabel,
-  unknownRunnerLabel,
   type Lang,
 } from "../core/i18n.js";
 
@@ -61,8 +59,7 @@ const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
-  const testCmd =
-    detection.testRunner?.value === "testthat" ? 'testthat::test_dir("tests")' : unknownRunnerLabel(lang);
+  const testCmd = detection.testRunner?.value === "testthat" ? 'testthat::test_dir("tests")' : undefined;
   return {
     summary: summarySentence(lang, "R", framework, detection.packageManager?.value),
     conventions: [t.style, runTestsConvention(lang, testCmd), t.deps],
@@ -71,8 +68,8 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 }
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
-  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
-  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (R)", body: reviewBody(lang, "", framework) },
     { id: "refactor", title: "Refactor (R)", body: refactorBody(lang) },

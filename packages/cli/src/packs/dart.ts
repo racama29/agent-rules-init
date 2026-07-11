@@ -5,8 +5,6 @@ import {
   runTestsConvention,
   summarySentence,
   testingBody,
-  unknownFrameworkLabel,
-  unknownRunnerLabel,
   type Lang,
 } from "../core/i18n.js";
 
@@ -64,14 +62,14 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return {
     summary: summarySentence(lang, "Dart", framework, "pub"),
-    conventions: [t.style, runTestsConvention(lang, runner ?? unknownRunnerLabel(lang)), t.deps],
+    conventions: [t.style, runTestsConvention(lang, runner), t.deps],
     architectureNotes: [framework === "flutter" ? t.archFlutter : t.archPlain, t.immutability],
   };
 }
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
-  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
-  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (Dart)", body: reviewBody(lang, "", framework) },
     { id: "refactor", title: "Refactor (Dart)", body: refactorBody(lang) },

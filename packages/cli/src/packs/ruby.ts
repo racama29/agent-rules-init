@@ -12,8 +12,6 @@ import {
   runTestsConvention,
   summarySentence,
   testingBody,
-  unknownFrameworkLabel,
-  unknownRunnerLabel,
   type Lang,
 } from "../core/i18n.js";
 
@@ -62,10 +60,10 @@ const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
   },
 };
 
-function testCommand(detection: DetectionResult, lang: Lang): string {
+function testCommand(detection: DetectionResult): string | undefined {
   if (detection.testRunner?.value === "rspec") return "bundle exec rspec";
   if (detection.testRunner?.value === "minitest") return "bundle exec rake test";
-  return unknownRunnerLabel(lang);
+  return undefined;
 }
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
@@ -73,14 +71,14 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   return {
     summary: summarySentence(lang, "Ruby", framework, "bundler"),
-    conventions: [t.style, runTestsConvention(lang, testCommand(detection, lang)), t.deps],
+    conventions: [t.style, runTestsConvention(lang, testCommand(detection)), t.deps],
     architectureNotes: t.arch,
   };
 }
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
-  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
-  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (Ruby)", body: reviewBody(lang, "", framework) },
     { id: "refactor", title: "Refactor (Ruby)", body: refactorBody(lang) },

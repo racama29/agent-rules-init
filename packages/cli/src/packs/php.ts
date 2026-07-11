@@ -12,8 +12,6 @@ import {
   runTestsConvention,
   summarySentence,
   testingBody,
-  unknownFrameworkLabel,
-  unknownRunnerLabel,
   type Lang,
 } from "../core/i18n.js";
 
@@ -70,8 +68,7 @@ const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
   const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
-  const testCmd =
-    detection.testRunner?.value === "phpunit" ? "vendor/bin/phpunit" : unknownRunnerLabel(lang);
+  const testCmd = detection.testRunner?.value === "phpunit" ? "vendor/bin/phpunit" : undefined;
   return {
     summary: summarySentence(lang, "PHP", framework, "composer"),
     conventions: [t.style, runTestsConvention(lang, testCmd), t.deps],
@@ -80,8 +77,8 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 }
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
-  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
-  const runner = detection.testRunner?.value === "phpunit" ? "PHPUnit" : unknownRunnerLabel(lang);
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value === "phpunit" ? "PHPUnit" : undefined;
   return [
     { id: "review", title: "Code Review (PHP)", body: reviewBody(lang, "", framework) },
     { id: "refactor", title: "Refactor (PHP)", body: refactorBody(lang) },

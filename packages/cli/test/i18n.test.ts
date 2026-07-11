@@ -6,7 +6,6 @@ import {
   reviewBody,
   refactorBody,
   testingBody,
-  unknownRunnerLabel,
   UI,
 } from "../src/core/i18n.js";
 
@@ -45,7 +44,21 @@ describe("shared builders", () => {
     expect(refactorBody("en")).toContain("without changing observable behavior");
     expect(testingBody("es", "pytest")).toContain("camino feliz");
     expect(testingBody("en", "pytest")).toContain("happy path");
-    expect(unknownRunnerLabel("en")).toBe("the project's test runner");
+  });
+
+  it("omits the framework clause when no framework is known", () => {
+    expect(reviewBody("en", "focus")).toBe(
+      "Review the current diff looking for bugs, focus. Point out only concrete issues with file and line."
+    );
+    expect(reviewBody("es", "")).toBe(
+      "Revisa el diff actual buscando bugs. Señala solo problemas concretos con línea de archivo."
+    );
+  });
+
+  it("falls back to a generic testing prompt without naming a runner", () => {
+    expect(testingBody("en")).toBe(
+      "Write tests for the highlighted code. Cover the happy path and at least one edge case."
+    );
   });
 
   it("exposes UI texts for both languages", () => {

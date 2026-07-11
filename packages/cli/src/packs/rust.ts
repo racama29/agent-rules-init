@@ -5,8 +5,6 @@ import {
   runTestsConvention,
   summarySentence,
   testingBody,
-  unknownFrameworkLabel,
-  unknownRunnerLabel,
   type Lang,
 } from "../core/i18n.js";
 
@@ -73,7 +71,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
   return [
     { id: "review", title: "Code Review (Rust)", body: reviewBody(lang, t.reviewFocus, framework) },
     { id: "refactor", title: "Refactor (Rust)", body: refactorBody(lang, t.refactorExtra) },

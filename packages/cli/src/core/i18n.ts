@@ -15,18 +15,28 @@ export function summarySentence(lang: Lang, language: string, framework?: string
   return `${language} project${framework ? ` using ${framework}` : ""}${paren}.`;
 }
 
-export function runTestsConvention(lang: Lang, cmd: string): string {
+export function runTestsConvention(lang: Lang, cmd?: string): string {
+  if (cmd) {
+    return lang === "es"
+      ? `Ejecuta los tests con ${cmd} antes de terminar una tarea.`
+      : `Run the tests with ${cmd} before finishing a task.`;
+  }
   return lang === "es"
-    ? `Ejecuta los tests con ${cmd} antes de terminar una tarea.`
-    : `Run the tests with ${cmd} before finishing a task.`;
+    ? "Ejecuta la suite de tests del repositorio antes de terminar una tarea."
+    : "Run the repository's test suite before finishing a task.";
 }
 
-export function reviewBody(lang: Lang, focus: string, framework: string): string {
+export function reviewBody(lang: Lang, focus: string, framework?: string): string {
   // Con focus vacío la frase colapsa a "bugs y desviaciones" sin coma colgante.
   const focusPart = focus ? `, ${focus}` : "";
+  if (framework) {
+    return lang === "es"
+      ? `Revisa el diff actual buscando bugs${focusPart} y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`
+      : `Review the current diff looking for bugs${focusPart} and deviations from ${framework} conventions. Point out only concrete issues with file and line.`;
+  }
   return lang === "es"
-    ? `Revisa el diff actual buscando bugs${focusPart} y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`
-    : `Review the current diff looking for bugs${focusPart} and deviations from ${framework} conventions. Point out only concrete issues with file and line.`;
+    ? `Revisa el diff actual buscando bugs${focusPart}. Señala solo problemas concretos con línea de archivo.`
+    : `Review the current diff looking for bugs${focusPart}. Point out only concrete issues with file and line.`;
 }
 
 export function refactorBody(lang: Lang, extra?: string): string {
@@ -37,18 +47,15 @@ export function refactorBody(lang: Lang, extra?: string): string {
   return extra ? `${base} ${extra}` : base;
 }
 
-export function testingBody(lang: Lang, runner: string): string {
+export function testingBody(lang: Lang, runner?: string): string {
+  if (runner) {
+    return lang === "es"
+      ? `Escribe tests con ${runner} para el código señalado. Cubre el camino feliz y al menos un caso límite.`
+      : `Write tests with ${runner} for the highlighted code. Cover the happy path and at least one edge case.`;
+  }
   return lang === "es"
-    ? `Escribe tests con ${runner} para el código señalado. Cubre el camino feliz y al menos un caso límite.`
-    : `Write tests with ${runner} for the highlighted code. Cover the happy path and at least one edge case.`;
-}
-
-export function unknownRunnerLabel(lang: Lang): string {
-  return lang === "es" ? "el test runner del proyecto" : "the project's test runner";
-}
-
-export function unknownFrameworkLabel(lang: Lang): string {
-  return lang === "es" ? "el framework del proyecto" : "the project's framework";
+    ? "Escribe tests para el código señalado. Cubre el camino feliz y al menos un caso límite."
+    : "Write tests for the highlighted code. Cover the happy path and at least one edge case.";
 }
 
 export interface UiTexts {
