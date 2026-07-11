@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { UI, type Lang } from "./i18n.js";
 
 export type AssistantId = "claude" | "codex";
 
@@ -50,16 +51,14 @@ export async function detectAvailableAssistants(execFn: ExecFn = defaultExecFn):
 export async function polishWithAssistant(
   assistant: AssistantId,
   content: string,
-  execFn: ExecFn = defaultExecFn
+  execFn: ExecFn = defaultExecFn,
+  lang: Lang = "es"
 ): Promise<string> {
-  const prompt = `Pule la redacción del siguiente documento de instrucciones para un agente de IA, sin cambiar su significado ni estructura. Devuelve únicamente el documento pulido, sin comentarios ni explicaciones adicionales:\n\n${content}`;
   try {
-    const result = await execFn(assistant, ["-p"], prompt);
+    const result = await execFn(assistant, ["-p"], UI[lang].polishPrompt(content));
     return result.stdout.trim() || content;
   } catch (err) {
-    console.warn(
-      `No se pudo pulir el contenido con ${assistant}, se mantiene el original: ${(err as Error).message}`
-    );
+    console.warn(UI[lang].polishFailed(assistant, (err as Error).message));
     return content;
   }
 }

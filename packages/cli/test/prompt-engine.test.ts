@@ -18,7 +18,7 @@ describe("collectLowConfidenceQuestions", () => {
         testRunner: { value: "vitest", confidence: "high" },
       },
     ];
-    expect(collectLowConfidenceQuestions(detections)).toEqual([]);
+    expect(collectLowConfidenceQuestions(detections, "es")).toEqual([]);
   });
 
   it("returns one question per low-confidence field", () => {
@@ -30,7 +30,7 @@ describe("collectLowConfidenceQuestions", () => {
         testRunner: { value: "vitest", confidence: "high" },
       },
     ];
-    const questions = collectLowConfidenceQuestions(detections);
+    const questions = collectLowConfidenceQuestions(detections, "es");
     expect(questions).toEqual([
       {
         packId: "js-ts",
@@ -38,6 +38,22 @@ describe("collectLowConfidenceQuestions", () => {
         message: "No se pudo determinar el framework para TypeScript/JavaScript. ¿Cuál usáis?",
       },
     ]);
+  });
+
+  it("builds human-readable questions in both languages (no raw field names)", () => {
+    const detections: DetectionResult[] = [
+      {
+        packId: "js-ts",
+        language: "JavaScript",
+        testRunner: { value: "unknown", confidence: "low" },
+      },
+    ];
+    expect(collectLowConfidenceQuestions(detections, "es")[0].message).toBe(
+      "No se pudo determinar el test runner para JavaScript. ¿Cuál usáis?"
+    );
+    expect(collectLowConfidenceQuestions(detections, "en")[0].message).toBe(
+      "Couldn't determine the test runner for JavaScript. Which one do you use?"
+    );
   });
 });
 

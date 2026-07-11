@@ -221,7 +221,7 @@ describe("extractCiCommands", () => {
 describe("extractStructure", () => {
   it("lists top-level dirs sorted, annotating only unequivocal names", () => {
     const files = ["src/index.ts", "src/deep/a.ts", "tests/a.test.ts", "weirddir/x.txt", "README.md"];
-    const dirs = extractStructure(baseSignals({ files }));
+    const dirs = extractStructure(baseSignals({ files }), "es");
     expect(dirs).toEqual([
       { dir: "src/", note: "código fuente" },
       { dir: "tests/", note: "tests" },
@@ -229,10 +229,15 @@ describe("extractStructure", () => {
     ]);
   });
 
+  it("annotates structure in English when lang is en", () => {
+    const dirs = extractStructure(baseSignals({ files: ["src/index.ts"] }), "en");
+    expect(dirs).toEqual([{ dir: "src/", note: "source code" }]);
+  });
+
   it("caps at 20 dirs and returns [] for a flat repo", () => {
-    expect(extractStructure(baseSignals({ files: ["README.md"] }))).toEqual([]);
+    expect(extractStructure(baseSignals({ files: ["README.md"] }), "es")).toEqual([]);
     const files = Array.from({ length: 30 }, (_, i) => `dir${String(i).padStart(2, "0")}/f.txt`);
-    expect(extractStructure(baseSignals({ files }))).toHaveLength(20);
+    expect(extractStructure(baseSignals({ files }), "es")).toHaveLength(20);
   });
 });
 
@@ -251,7 +256,8 @@ describe("buildRepoFacts", () => {
         githubWorkflows: [
           { path: ".github/workflows/ci.yml", content: "jobs:\n  j:\n    steps:\n      - run: npm ci\n" },
         ],
-      })
+      }),
+      "es"
     );
     expect(facts.commands).toContainEqual({ source: "npm", invocation: "npm test", detail: "vitest run" });
     expect(facts.commands).toContainEqual({ source: "make", invocation: "make docs" });
@@ -262,7 +268,7 @@ describe("buildRepoFacts", () => {
   });
 
   it("returns fully empty facts for an empty repo", () => {
-    const facts = buildRepoFacts(baseSignals({}));
+    const facts = buildRepoFacts(baseSignals({}), "es");
     expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0 });
   });
 });

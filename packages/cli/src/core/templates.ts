@@ -1,3 +1,4 @@
+import { UI, type Lang } from "./i18n.js";
 import type { CommandSource, DetectionResult, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
 
 export interface RenderEntry {
@@ -33,7 +34,8 @@ const SOURCE_FILES: Record<CommandSource, string> = {
   tox: "tox.ini",
 };
 
-export function renderRepoFacts(facts: RepoFacts): string {
+export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
+  const ui = UI[lang];
   const sections: string[] = [];
   if (facts.commands.length > 0) {
     const lines = facts.commands.map((c) =>
@@ -41,43 +43,43 @@ export function renderRepoFacts(facts: RepoFacts): string {
         ? `- \`${c.invocation}\` → \`${c.detail}\` (${SOURCE_FILES[c.source]})`
         : `- \`${c.invocation}\` (${SOURCE_FILES[c.source]})`
     );
-    for (const o of facts.omittedCommands) lines.push(`- …y ${o.count} más en ${SOURCE_FILES[o.source]}`);
-    sections.push(["## Comandos del repo", "", ...lines].join("\n"));
+    for (const o of facts.omittedCommands) lines.push(`- ${ui.andMore(o.count, SOURCE_FILES[o.source])}`);
+    sections.push([`## ${ui.sections.commands}`, "", ...lines].join("\n"));
   }
   if (facts.structure.length > 0) {
     const lines = facts.structure.map((d) => (d.note ? `- \`${d.dir}\` — ${d.note}` : `- \`${d.dir}\``));
-    sections.push(["## Estructura", "", ...lines].join("\n"));
+    sections.push([`## ${ui.sections.structure}`, "", ...lines].join("\n"));
   }
   if (facts.ciCommands.length > 0) {
     const lines = facts.ciCommands.map((c) => `- \`${c.command}\` (${c.workflow})`);
-    if (facts.omittedCiCount > 0) lines.push(`- …y ${facts.omittedCiCount} más`);
-    sections.push(["## Lo que ejecuta CI (GitHub Actions)", "", ...lines].join("\n"));
+    if (facts.omittedCiCount > 0) lines.push(`- ${ui.andMore(facts.omittedCiCount)}`);
+    sections.push([`## ${ui.sections.ci}`, "", ...lines].join("\n"));
   }
   return sections.join("\n\n");
 }
 
-function renderDocument(title: string, entries: RenderEntry[], facts?: RepoFacts): string {
-  const factsBlock = facts ? renderRepoFacts(facts) : "";
+function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  const factsBlock = facts ? renderRepoFacts(facts, lang) : "";
   return [
     title,
     "",
-    "Generado por agent-rules-init a partir de lo detectado en este repo.",
+    UI[lang].generatedHeader,
     "",
     renderSection(entries),
     ...(factsBlock ? ["", factsBlock] : []),
   ].join("\n");
 }
 
-export function renderClaudeMd(entries: RenderEntry[], facts?: RepoFacts): string {
-  return renderDocument("# CLAUDE.md", entries, facts);
+export function renderClaudeMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  return renderDocument("# CLAUDE.md", entries, facts, lang);
 }
 
-export function renderAgentsMd(entries: RenderEntry[], facts?: RepoFacts): string {
-  return renderDocument("# AGENTS.md", entries, facts);
+export function renderAgentsMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  return renderDocument("# AGENTS.md", entries, facts, lang);
 }
 
-export function renderCopilotInstructions(entries: RenderEntry[], facts?: RepoFacts): string {
-  return renderDocument("# Copilot Instructions", entries, facts);
+export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  return renderDocument("# Copilot Instructions", entries, facts, lang);
 }
 
 export function renderPromptFiles(

@@ -11,7 +11,7 @@ import {
   type RenderEntry,
 } from "./core/templates.js";
 import { buildRepoFacts } from "./core/repo-facts.js";
-import type { Lang } from "./core/i18n.js";
+import { UI, detectLang, type Lang } from "./core/i18n.js";
 import {
   collectLowConfidenceQuestions,
   askQuestions,
@@ -60,49 +60,50 @@ export interface RunCliOptions {
   promptFn?: PromptFn;
   execFn?: ExecFn;
   skipLlm?: boolean;
+  lang?: Lang;
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
   const promptFn = options.promptFn ?? defaultPromptFn;
   const execFn = options.execFn ?? defaultExecFn;
+  const lang = options.lang ?? detectLang();
+  const ui = UI[lang];
 
   const signals = scanRepo(rootPath);
   const rawDetections = ALL_PACKS.map((pack) => pack.detect(signals)).filter(
     (d): d is NonNullable<typeof d> => d !== null
   );
 
-  const questions = collectLowConfidenceQuestions(rawDetections);
+  const questions = collectLowConfidenceQuestions(rawDetections, lang);
   const answers = await askQuestions(questions, promptFn);
   const detections = applyAnswers(rawDetections, answers);
-  const facts = buildRepoFacts(signals);
+  const facts = buildRepoFacts(signals, lang);
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
-    return { detection, ruleSet: pack.rules(detection) };
+    return { detection, ruleSet: pack.rules(detection, lang) };
   });
 
   const files: { path: string; content: string }[] = [];
 
   if (entries.length > 0) {
-    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries, facts) });
-    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries, facts) });
+    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries, facts, lang) });
+    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries, facts, lang) });
     files.push({
       path: ".github/copilot-instructions.generated.md",
-      content: renderCopilotInstructions(entries, facts),
+      content: renderCopilotInstructions(entries, facts, lang),
     });
     for (const detection of detections) {
       const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
-      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection))) {
+      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang))) {
         files.push(file);
       }
     }
   } else {
-    const factsBlock = renderRepoFacts(facts);
+    const factsBlock = renderRepoFacts(facts, lang);
     files.push({
       path: "CLAUDE.generated.md",
-      content:
-        "# CLAUDE.md\n\nNo se detectó ningún stack conocido. Completa este archivo manualmente.\n" +
-        (factsBlock ? `\n${factsBlock}\n` : ""),
+      content: `# CLAUDE.md\n\n${ui.noStackFallback}\n` + (factsBlock ? `\n${factsBlock}\n` : ""),
     });
   }
 
@@ -110,13 +111,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     const assistants = await detectAvailableAssistants(execFn);
     if (assistants.length > 0) {
       const chosenAssistant = assistants[0];
-      clack.log.info(`${chosenAssistant} detectado — puede ayudar a pulir la redacción final.`);
-      const usePolish = await clack.confirm({
-        message: `Se detectó ${chosenAssistant}. ¿Quieres que pula la redacción final?`,
-      });
+      clack.log.info(ui.polishDetected(chosenAssistant));
+      const usePolish = await clack.confirm({ message: ui.polishConfirm(chosenAssistant) });
       if (usePolish === true) {
         for (const file of files) {
-          file.content = await polishWithAssistant(chosenAssistant, file.content, execFn);
+          file.content = await polishWithAssistant(chosenAssistant, file.content, execFn, lang);
         }
       }
     }
@@ -160,20 +159,13 @@ export function getVersion(): string {
   return pkg.version;
 }
 
-const USAGE = `agent-rules-init — genera CLAUDE.md, AGENTS.md, copilot-instructions y prompts de review/refactor/testing a partir del stack detectado en tu repo.
-
-Uso:
-  npx agent-rules-init            escanea el directorio actual y genera los archivos *.generated.*
-  npx agent-rules-init --help     muestra esta ayuda
-  npx agent-rules-init --version  muestra la versión
-
-Los archivos se crean siempre con sufijo .generated y nunca sobrescriben nada existente:
-revisa su contenido y quita el sufijo para activarlos.`;
-
 export async function main(): Promise<void> {
   const action = resolveCliAction(process.argv.slice(2));
+  const lang = action.kind === "run" && action.lang ? action.lang : detectLang();
+  const ui = UI[lang];
+
   if (action.kind === "help") {
-    console.log(USAGE);
+    console.log(ui.usage);
     return;
   }
   if (action.kind === "version") {
@@ -181,12 +173,12 @@ export async function main(): Promise<void> {
     return;
   }
   if (action.kind === "unknown") {
-    console.error(`Opción no reconocida: ${action.flag}\n\n${USAGE}`);
+    console.error(`${ui.unknownOption(action.flag)}\n\n${ui.usage}`);
     process.exitCode = 1;
     return;
   }
   if (action.kind === "invalid-lang") {
-    console.error(`Valor de --lang no válido: "${action.value}" (usa "es" o "en").\n\n${USAGE}`);
+    console.error(`${ui.invalidLang(action.value)}\n\n${ui.usage}`);
     process.exitCode = 1;
     return;
   }
@@ -194,14 +186,11 @@ export async function main(): Promise<void> {
   clack.intro("agent-rules-init");
 
   if (!hasInteractiveTty()) {
-    console.warn(
-      "No se detectó una terminal interactiva (esto pasa a veces en Git Bash en Windows). " +
-        "Continuando sin preguntas ni oferta de pulido con IA; se usarán los valores detectados."
-    );
+    console.warn(ui.noTtyWarning);
   }
 
   try {
-    const results = await runCli(process.cwd());
+    const results = await runCli(process.cwd(), { lang });
     const written = results.filter((r) => r.status === "written");
     const failures = results.filter((r) => r.status === "error");
 
@@ -209,27 +198,23 @@ export async function main(): Promise<void> {
       if (result.status === "written") {
         clack.log.success(result.path);
       } else if (result.status === "skipped") {
-        clack.log.info(`${result.path}: ya existía, se conserva sin cambios.`);
+        clack.log.info(ui.fileSkipped(result.path));
       } else {
         clack.log.warn(`${result.path}: ${result.error}`);
       }
     }
 
     if (written.length > 0) {
-      clack.outro(
-        "Revisa los archivos *.generated.* y, cuando estés conforme, quita el sufijo " +
-          '".generated" (ej. "CLAUDE.generated.md" → "CLAUDE.md") para activarlos — ' +
-          "tu asistente de IA solo lee el nombre final, no el generado."
-      );
+      clack.outro(ui.outroWritten);
     } else {
-      clack.outro("No se generó ningún archivo nuevo.");
+      clack.outro(ui.outroNothing);
     }
 
     if (failures.length > 0) {
       process.exitCode = 1;
     }
   } catch (err) {
-    clack.log.error(`Fallo inesperado: ${(err as Error).message}`);
+    clack.log.error(ui.unexpectedError((err as Error).message));
     process.exitCode = 1;
   }
 }

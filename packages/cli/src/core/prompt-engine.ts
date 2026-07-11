@@ -1,4 +1,5 @@
 import * as clack from "@clack/prompts";
+import { UI, detectLang, type Lang } from "./i18n.js";
 import type { DetectionResult } from "./types.js";
 
 export type QuestionField = "framework" | "testRunner" | "linter" | "packageManager";
@@ -11,7 +12,8 @@ export interface Question {
 
 const FIELDS: QuestionField[] = ["framework", "testRunner", "linter", "packageManager"];
 
-export function collectLowConfidenceQuestions(detections: DetectionResult[]): Question[] {
+export function collectLowConfidenceQuestions(detections: DetectionResult[], lang: Lang): Question[] {
+  const ui = UI[lang];
   const questions: Question[] = [];
   for (const detection of detections) {
     for (const field of FIELDS) {
@@ -20,7 +22,7 @@ export function collectLowConfidenceQuestions(detections: DetectionResult[]): Qu
         questions.push({
           packId: detection.packId,
           field,
-          message: `No se pudo determinar el ${field} para ${detection.language}. ¿Cuál usáis?`,
+          message: ui.question(ui.fieldLabels[field], detection.language),
         });
       }
     }
@@ -36,14 +38,12 @@ export function hasInteractiveTty(): boolean {
 
 export const defaultPromptFn: PromptFn = async (message) => {
   if (!hasInteractiveTty()) {
-    console.warn(
-      `No se detectó una terminal interactiva; se omite la pregunta "${message}" y se usa el valor detectado.`
-    );
+    console.warn(UI[detectLang()].skippedQuestion(message));
     return "";
   }
   const answer = await clack.text({ message });
   if (clack.isCancel(answer)) {
-    clack.cancel("Operación cancelada.");
+    clack.cancel(UI[detectLang()].cancelled);
     process.exit(1);
   }
   return answer;

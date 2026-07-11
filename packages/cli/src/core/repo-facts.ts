@@ -1,5 +1,6 @@
 import path from "node:path";
 import { parse } from "yaml";
+import { UI, type Lang } from "./i18n.js";
 import type { CiCommand, CommandEntry, CommandSource, DirEntry, RepoFacts, RepoSignals } from "./types.js";
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
@@ -159,29 +160,10 @@ export function extractCiCommands(signals: RepoSignals): { commands: CiCommand[]
   };
 }
 
-const DIR_NOTES: Record<string, string> = {
-  src: "código fuente",
-  lib: "código fuente",
-  tests: "tests",
-  test: "tests",
-  spec: "tests",
-  __tests__: "tests",
-  docs: "documentación",
-  doc: "documentación",
-  examples: "ejemplos",
-  scripts: "scripts auxiliares",
-  tools: "herramientas auxiliares",
-  migrations: "migraciones de base de datos",
-  benchmarks: "benchmarks",
-  ".github": "workflows y configuración de GitHub",
-  public: "activos públicos",
-  static: "activos estáticos",
-  assets: "activos",
-  config: "configuración",
-};
 const MAX_DIRS = 20;
 
-export function extractStructure(signals: RepoSignals): DirEntry[] {
+export function extractStructure(signals: RepoSignals, lang: Lang): DirEntry[] {
+  const dirNotes = UI[lang].dirNotes;
   const dirs = new Set<string>();
   for (const file of signals.files) {
     const normalized = file.split(path.sep).join("/");
@@ -192,12 +174,12 @@ export function extractStructure(signals: RepoSignals): DirEntry[] {
     .sort()
     .slice(0, MAX_DIRS)
     .map((dir) => {
-      const note = DIR_NOTES[dir.toLowerCase()];
+      const note = dirNotes[dir.toLowerCase()];
       return note ? { dir: `${dir}/`, note } : { dir: `${dir}/` };
     });
 }
 
-export function buildRepoFacts(signals: RepoSignals): RepoFacts {
+export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
   const allCommands = [
     ...extractNpmCommands(signals),
     ...extractComposerCommands(signals),
@@ -210,7 +192,7 @@ export function buildRepoFacts(signals: RepoSignals): RepoFacts {
   return {
     commands: kept,
     omittedCommands: omitted,
-    structure: extractStructure(signals),
+    structure: extractStructure(signals, lang),
     ciCommands,
     omittedCiCount,
   };
