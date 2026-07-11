@@ -1,0 +1,9 @@
+[project]
+name = "fixture-python-uv-tox"
+dependencies = ["flask"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+fixture-app = "fixture_app.cli:main"

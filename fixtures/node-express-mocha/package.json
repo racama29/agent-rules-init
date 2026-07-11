@@ -1,0 +1,10 @@
+{
+  "name": "fixture-node-express-mocha",
+  "main": "lib/app.js",
+  "dependencies": { "express": "^4.19.0" },
+  "devDependencies": { "mocha": "^10.4.0", "eslint": "^9.0.0" },
+  "scripts": {
+    "test": "mocha --recursive test/",
+    "lint": "eslint lib/ test/"
+  }
+}
