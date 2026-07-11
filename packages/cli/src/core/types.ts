@@ -1,3 +1,5 @@
+import type { Lang } from "./i18n.js";
+
 export interface PackageJsonManifest {
   name?: string;
   dependencies: Record<string, string>;
@@ -100,6 +102,6 @@ export interface RepoFacts {
 export interface Pack {
   id: string;
   detect(signals: RepoSignals): DetectionResult | null;
-  rules(detection: DetectionResult): RuleSet;
-  promptTemplates(detection: DetectionResult): PromptTemplate[];
+  rules(detection: DetectionResult, lang: Lang): RuleSet;
+  promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[];
 }

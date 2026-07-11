@@ -43,7 +43,7 @@ describe("scalaPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = scalaPack.detect(baseSignals({ buildSbt: 'name := "app"\n' }))!;
-    const templates = scalaPack.promptTemplates(detection);
+    const templates = scalaPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

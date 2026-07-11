@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.buildGradle;
@@ -31,40 +41,45 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Kotlin${framework !== "none" ? ` con ${framework}` : ""} (gradle).`,
-    conventions: [
-      "Sigue las convenciones de estilo oficiales de Kotlin (kotlinlang.org/docs/coding-conventions.html).",
-      "Ejecuta los tests con `gradle test` antes de terminar una tarea.",
-      "Prefiere tipos no-nulos y `val` sobre `var` salvo que la mutabilidad sea necesaria.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; nullsafety: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    style: "Sigue las convenciones de estilo oficiales de Kotlin (kotlinlang.org/docs/coding-conventions.html).",
+    nullsafety: "Prefiere tipos no-nulos y `val` sobre `var` salvo que la mutabilidad sea necesaria.",
+    arch: [
       "Respeta la separación en capas (controller/service/repository) si el proyecto ya la usa.",
       "Prefiere inyección de dependencias sobre instanciación manual cuando el framework ya la ofrezca.",
     ],
+    reviewFocus: "uso innecesario de `!!`",
+  },
+  en: {
+    style: "Follow the official Kotlin style conventions (kotlinlang.org/docs/coding-conventions.html).",
+    nullsafety: "Prefer non-null types and `val` over `var` unless mutability is required.",
+    arch: [
+      "Respect the layered separation (controller/service/repository) if the project already uses it.",
+      "Prefer dependency injection over manual instantiation when the framework already provides it.",
+    ],
+    reviewFocus: "unnecessary `!!` usage",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Kotlin", framework, "gradle"),
+    conventions: [t.style, runTestsConvention(lang, "`gradle test`"), t.nullsafety],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Kotlin)",
-      body: `Revisa el diff actual buscando bugs, uso innecesario de \`!!\` y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Kotlin)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Kotlin)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Kotlin)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Kotlin)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Kotlin)", body: testingBody(lang, runner) },
   ];
 }
 

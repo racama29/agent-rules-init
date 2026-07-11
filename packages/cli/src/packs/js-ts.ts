@@ -6,6 +6,16 @@ import type {
   RepoSignals,
   RuleSet,
 } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: Record<string, string> = {
   next: "next",
@@ -76,49 +86,57 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  const testRunner = detection.testRunner?.value ?? "unknown";
-  const conventions: string[] = [];
-  if (detection.usesTypeScript) {
-    conventions.push("Usa TypeScript estricto; evita `any` salvo justificación explícita.");
-  }
-  conventions.push(
-    `Ejecuta los tests con ${testRunner === "unknown" ? "el test runner del proyecto" : testRunner} antes de dar por terminada una tarea.`
-  );
-  conventions.push(
-    detection.moduleFormat === "module"
-      ? "Sigue el estilo de módulos ES existente (import/export), no mezcles con require()."
-      : "Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export."
-  );
-  return {
-    summary: `Proyecto ${detection.usesTypeScript ? "TypeScript" : "JavaScript"}${framework !== "none" ? ` con ${framework}` : ""}.`,
-    conventions,
-    architectureNotes: [
+const TEXTS: Record<
+  Lang,
+  { tsStrict: string; esModules: string; commonJs: string; arch: string[]; reviewFocus: string; refactorExtra: string }
+> = {
+  es: {
+    tsStrict: "Usa TypeScript estricto; evita `any` salvo justificación explícita.",
+    esModules: "Sigue el estilo de módulos ES existente (import/export), no mezcles con require().",
+    commonJs: "Sigue el estilo CommonJS existente (require()/module.exports), no mezcles con import/export.",
+    arch: [
       "Mantén los componentes/módulos pequeños y con una responsabilidad clara.",
       "Coloca los tests junto al código que prueban o en un directorio `test/` espejo, según lo que ya use el repo.",
     ],
+    reviewFocus: "errores de tipado, condiciones de carrera en async/await",
+    refactorExtra: "Respeta los tipos existentes.",
+  },
+  en: {
+    tsStrict: "Use strict TypeScript; avoid `any` unless explicitly justified.",
+    esModules: "Follow the existing ES modules style (import/export); do not mix in require().",
+    commonJs: "Follow the existing CommonJS style (require()/module.exports); do not mix in import/export.",
+    arch: [
+      "Keep components/modules small and single-purpose.",
+      "Place tests next to the code they cover or in a mirrored `test/` directory, following what the repo already uses.",
+    ],
+    reviewFocus: "typing errors, async/await race conditions",
+    refactorExtra: "Respect the existing types.",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
+  const conventions: string[] = [];
+  if (detection.usesTypeScript) conventions.push(t.tsStrict);
+  conventions.push(runTestsConvention(lang, runner ?? unknownRunnerLabel(lang)));
+  conventions.push(detection.moduleFormat === "module" ? t.esModules : t.commonJs);
+  return {
+    summary: summarySentence(lang, detection.usesTypeScript ? "TypeScript" : "JavaScript", framework),
+    conventions,
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (JS/TS)",
-      body: `Revisa el diff actual buscando bugs de tipado, condiciones de carrera en async/await, y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (JS/TS)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los tipos existentes.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (JS/TS)",
-      body: `Escribe tests para el código señalado usando ${detection.testRunner?.value !== "unknown" ? `el test runner detectado (${detection.testRunner?.value})` : "el test runner del proyecto"}. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (JS/TS)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (JS/TS)", body: refactorBody(lang, t.refactorExtra) },
+    { id: "testing", title: "Testing (JS/TS)", body: testingBody(lang, runner) },
   ];
 }
 

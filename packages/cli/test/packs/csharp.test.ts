@@ -41,7 +41,7 @@ describe("csharpPack", () => {
     const detection = csharpPack.detect(
       baseSignals({ csproj: '<Project Sdk="Microsoft.NET.Sdk"></Project>' })
     )!;
-    const templates = csharpPack.promptTemplates(detection);
+    const templates = csharpPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

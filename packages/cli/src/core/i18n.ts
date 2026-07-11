@@ -22,9 +22,11 @@ export function runTestsConvention(lang: Lang, cmd: string): string {
 }
 
 export function reviewBody(lang: Lang, focus: string, framework: string): string {
+  // Con focus vacío la frase colapsa a "bugs y desviaciones" sin coma colgante.
+  const focusPart = focus ? `, ${focus}` : "";
   return lang === "es"
-    ? `Revisa el diff actual buscando bugs, ${focus} y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`
-    : `Review the current diff looking for bugs, ${focus} and deviations from ${framework} conventions. Point out only concrete issues with file and line.`;
+    ? `Revisa el diff actual buscando bugs${focusPart} y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`
+    : `Review the current diff looking for bugs${focusPart} and deviations from ${framework} conventions. Point out only concrete issues with file and line.`;
 }
 
 export function refactorBody(lang: Lang, extra?: string): string {

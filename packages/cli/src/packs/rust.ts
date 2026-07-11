@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["actix-web", "actix-web"],
@@ -28,40 +38,46 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Rust${framework !== "none" ? ` con ${framework}` : ""} (cargo).`,
-    conventions: [
-      "Sigue el formato estándar de `rustfmt`; corre `cargo clippy` para detectar problemas idiomáticos.",
-      "Ejecuta los tests con `cargo test` antes de terminar una tarea.",
-      "Evita `unwrap()`/`expect()` en código de producción salvo que la invariante esté justificada.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; unwrap: string; arch: string[]; reviewFocus: string; refactorExtra: string }> = {
+  es: {
+    style: "Sigue el formato estándar de `rustfmt`; corre `cargo clippy` para detectar problemas idiomáticos.",
+    unwrap: "Evita `unwrap()`/`expect()` en código de producción salvo que la invariante esté justificada.",
+    arch: [
       "Mantén los módulos con una responsabilidad clara; usa `mod.rs` o archivos de módulo con nombre explícito según lo que ya use el repo.",
       "Declara toda dependencia nueva en Cargo.toml y mantén Cargo.lock sincronizado.",
     ],
+    reviewFocus: "usos innecesarios de `unwrap()`/`clone()`",
+    refactorExtra: "Respeta el sistema de ownership existente.",
+  },
+  en: {
+    style: "Follow the standard `rustfmt` formatting; run `cargo clippy` to catch idiomatic issues.",
+    unwrap: "Avoid `unwrap()`/`expect()` in production code unless the invariant is justified.",
+    arch: [
+      "Keep modules single-purpose; use `mod.rs` or explicitly named module files following what the repo already uses.",
+      "Declare every new dependency in Cargo.toml and keep Cargo.lock in sync.",
+    ],
+    reviewFocus: "unnecessary uses of `unwrap()`/`clone()`",
+    refactorExtra: "Respect the existing ownership model.",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Rust", framework, "cargo"),
+    conventions: [t.style, runTestsConvention(lang, "`cargo test`"), t.unwrap],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Rust)",
-      body: `Revisa el diff actual buscando bugs, usos innecesarios de \`unwrap()\`/\`clone()\` y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Rust)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta el sistema de ownership existente.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Rust)",
-      body: `Escribe tests con \`cargo test\` para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Rust)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Rust)", body: refactorBody(lang, t.refactorExtra) },
+    { id: "testing", title: "Testing (Rust)", body: testingBody(lang, "`cargo test`") },
   ];
 }
 

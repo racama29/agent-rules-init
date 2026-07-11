@@ -49,7 +49,7 @@ describe("elixirPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = elixirPack.detect(baseSignals({ mixExs: "defmodule MyApp.MixProject do\nend\n" }))!;
-    const templates = elixirPack.promptTemplates(detection);
+    const templates = elixirPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

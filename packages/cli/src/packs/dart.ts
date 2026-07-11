@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pubspecYaml;
@@ -26,42 +36,46 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
+const TEXTS: Record<
+  Lang,
+  { style: string; deps: string; archFlutter: string; archPlain: string; immutability: string }
+> = {
+  es: {
+    style: "Sigue la guía de estilo oficial de Dart (dart.dev/effective-dart/style).",
+    deps: "Declara toda dependencia nueva en pubspec.yaml, nunca la instales sin registrarla.",
+    archFlutter:
+      "Separa la lógica de negocio de los widgets cuando el proyecto ya siga ese patrón (p. ej. BLoC/Provider/Riverpod).",
+    archPlain: "Mantén los módulos con una responsabilidad clara.",
+    immutability: "Prefiere `final`/`const` sobre variables mutables cuando sea posible.",
+  },
+  en: {
+    style: "Follow the official Dart style guide (dart.dev/effective-dart/style).",
+    deps: "Declare every new dependency in pubspec.yaml; never install one without registering it.",
+    archFlutter:
+      "Keep business logic out of widgets when the project already follows that pattern (e.g. BLoC/Provider/Riverpod).",
+    archPlain: "Keep modules single-purpose.",
+    immutability: "Prefer `final`/`const` over mutable variables when possible.",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return {
-    summary: `Proyecto Dart${framework !== "none" ? ` con ${framework}` : ""} (pub).`,
-    conventions: [
-      "Sigue la guía de estilo oficial de Dart (dart.dev/effective-dart/style).",
-      `Ejecuta los tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} antes de terminar una tarea.`,
-      "Declara toda dependencia nueva en pubspec.yaml, nunca la instales sin registrarla.",
-    ],
-    architectureNotes: [
-      framework === "flutter"
-        ? "Separa la lógica de negocio de los widgets cuando el proyecto ya siga ese patrón (p. ej. BLoC/Provider/Riverpod)."
-        : "Mantén los módulos con una responsabilidad clara.",
-      "Prefiere `final`/`const` sobre variables mutables cuando sea posible.",
-    ],
+    summary: summarySentence(lang, "Dart", framework, "pub"),
+    conventions: [t.style, runTestsConvention(lang, runner ?? unknownRunnerLabel(lang)), t.deps],
+    architectureNotes: [framework === "flutter" ? t.archFlutter : t.archPlain, t.immutability],
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Dart)",
-      body: `Revisa el diff actual buscando bugs y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Dart)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Dart)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Dart)", body: reviewBody(lang, "", framework) },
+    { id: "refactor", title: "Refactor (Dart)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Dart)", body: testingBody(lang, runner) },
   ];
 }
 

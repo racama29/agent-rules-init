@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["find_package(qt", "qt"],
@@ -58,40 +68,48 @@ function detect(signals: RepoSignals): DetectionResult | null {
   return { packId: "cpp", language: "C/C++", framework, testRunner, packageManager };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto C/C++${framework !== "none" ? ` con ${framework}` : ""} (${detection.packageManager?.value}).`,
-    conventions: [
-      "Sigue el estilo de formato ya usado en el proyecto (revisa si hay un `.clang-format`).",
-      `Compila y ejecuta los tests con ${detection.packageManager?.value === "cmake" ? "cmake --build . && ctest" : "make test"} antes de terminar una tarea.`,
+const TEXTS: Record<Lang, { style: string; memory: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    style: "Sigue el estilo de formato ya usado en el proyecto (revisa si hay un `.clang-format`).",
+    memory:
       "Gestiona la memoria con cuidado: prefiere RAII/smart pointers sobre `new`/`delete` manuales cuando el proyecto ya lo haga.",
-    ],
-    architectureNotes: [
+    arch: [
       "Mantén los headers con guardas de inclusión (`#pragma once` o include guards) consistentes con el resto del proyecto.",
       "Declara toda dependencia nueva en el sistema de build existente (CMakeLists.txt o Makefile).",
     ],
+    reviewFocus: "fugas de memoria, punteros colgantes",
+  },
+  en: {
+    style: "Follow the formatting style already used in the project (check for a `.clang-format`).",
+    memory:
+      "Manage memory carefully: prefer RAII/smart pointers over manual `new`/`delete` when the project already does.",
+    arch: [
+      "Keep header include guards (`#pragma once` or include guards) consistent with the rest of the project.",
+      "Declare every new dependency in the existing build system (CMakeLists.txt or Makefile).",
+    ],
+    reviewFocus: "memory leaks, dangling pointers",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const testCmd = detection.packageManager?.value === "cmake" ? "cmake --build . && ctest" : "make test";
+  return {
+    summary: summarySentence(lang, "C/C++", framework, detection.packageManager?.value),
+    conventions: [t.style, runTestsConvention(lang, testCmd), t.memory],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (C/C++)",
-      body: `Revisa el diff actual buscando fugas de memoria, punteros colgantes y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (C/C++)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (C/C++)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el framework de tests del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (C/C++)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (C/C++)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (C/C++)", body: testingBody(lang, runner) },
   ];
 }
 

@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.packageSwift;
@@ -25,40 +35,44 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Swift${framework !== "none" ? ` con ${framework}` : ""} (Swift Package Manager).`,
-    conventions: [
-      "Sigue la guía de estilo de la API de Swift (swift.org/documentation/api-design-guidelines).",
-      "Ejecuta los tests con `swift test` antes de terminar una tarea.",
-      "Declara toda dependencia nueva en Package.swift, nunca la añadas solo en Xcode.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; deps: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    style: "Sigue la guía de estilo de la API de Swift (swift.org/documentation/api-design-guidelines).",
+    deps: "Declara toda dependencia nueva en Package.swift, nunca la añadas solo en Xcode.",
+    arch: [
       "Prefiere `struct` sobre `class` salvo que se necesite semántica de referencia.",
       "Evita forzar el desenvuelto de opcionales (`!`) fuera de contextos donde la invariante esté garantizada.",
     ],
+    reviewFocus: "desenvueltos forzados de opcionales",
+  },
+  en: {
+    style: "Follow the Swift API design guidelines (swift.org/documentation/api-design-guidelines).",
+    deps: "Declare every new dependency in Package.swift; never add it only in Xcode.",
+    arch: [
+      "Prefer `struct` over `class` unless reference semantics are needed.",
+      "Avoid force-unwrapping optionals (`!`) outside contexts where the invariant is guaranteed.",
+    ],
+    reviewFocus: "force-unwrapped optionals",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Swift", framework, "Swift Package Manager"),
+    conventions: [t.style, runTestsConvention(lang, "`swift test`"), t.deps],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Swift)",
-      body: `Revisa el diff actual buscando bugs, desenvueltos forzados de opcionales y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Swift)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Swift)",
-      body: `Escribe tests con \`swift test\` para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Swift)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Swift)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Swift)", body: testingBody(lang, "`swift test`") },
   ];
 }
 

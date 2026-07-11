@@ -6,6 +6,16 @@ import type {
   RepoSignals,
   RuleSet,
 } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["fastapi", "fastapi"],
@@ -66,40 +76,48 @@ function detect(signals: RepoSignals): DetectionResult | null {
   return { packId: "python", language: "Python", framework, testRunner, packageManager };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Python${framework !== "none" ? ` con ${framework}` : ""}.`,
-    conventions: [
-      "Sigue PEP 8; usa type hints en funciones públicas.",
-      `Ejecuta los tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} antes de terminar una tarea.`,
-      "No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; deps: string; arch: string[]; reviewFocus: string; refactorExtra: string }> = {
+  es: {
+    style: "Sigue PEP 8; usa type hints en funciones públicas.",
+    deps: "No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.",
+    arch: [
       "Mantén la lógica de negocio separada de la capa de framework cuando el proyecto ya siga ese patrón.",
       "Usa entornos virtuales; no instales paquetes globalmente.",
     ],
+    reviewFocus: "manejo de excepciones incorrecto",
+    refactorExtra: "Respeta los type hints existentes.",
+  },
+  en: {
+    style: "Follow PEP 8; use type hints on public functions.",
+    deps: "Do not introduce new dependencies without adding them to the existing dependency manifest.",
+    arch: [
+      "Keep business logic separate from the framework layer when the project already follows that pattern.",
+      "Use virtual environments; never install packages globally.",
+    ],
+    reviewFocus: "incorrect exception handling",
+    refactorExtra: "Respect the existing type hints.",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Python", framework),
+    conventions: [t.style, runTestsConvention(lang, runner ?? unknownRunnerLabel(lang)), t.deps],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Python)",
-      body: `Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Python)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable. Respeta los type hints existentes.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Python)",
-      body: `Escribe tests para el código señalado usando ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"}. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Python)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Python)", body: refactorBody(lang, t.refactorExtra) },
+    { id: "testing", title: "Testing (Python)", body: testingBody(lang, runner) },
   ];
 }
 

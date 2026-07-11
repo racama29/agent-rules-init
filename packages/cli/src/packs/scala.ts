@@ -1,4 +1,14 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["playframework", "play"],
@@ -43,40 +53,45 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Scala${framework !== "none" ? ` con ${framework}` : ""} (sbt).`,
-    conventions: [
-      "Sigue la guía de estilo oficial de Scala; ejecuta `scalafmt` si el proyecto ya lo usa.",
-      `Ejecuta los tests con \`sbt test\` antes de terminar una tarea.`,
-      "Prefiere estructuras inmutables y funciones puras cuando el proyecto ya siga ese estilo.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; immutability: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    style: "Sigue la guía de estilo oficial de Scala; ejecuta `scalafmt` si el proyecto ya lo usa.",
+    immutability: "Prefiere estructuras inmutables y funciones puras cuando el proyecto ya siga ese estilo.",
+    arch: [
       "Mantén los módulos con una responsabilidad clara; usa `case class` para modelos de datos.",
       "Declara toda dependencia nueva en `build.sbt`.",
     ],
+    reviewFocus: "usos innecesarios de mutabilidad",
+  },
+  en: {
+    style: "Follow the official Scala style guide; run `scalafmt` if the project already uses it.",
+    immutability: "Prefer immutable structures and pure functions when the project already follows that style.",
+    arch: [
+      "Keep modules single-purpose; use `case class` for data models.",
+      "Declare every new dependency in `build.sbt`.",
+    ],
+    reviewFocus: "unnecessary mutability",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Scala", framework, "sbt"),
+    conventions: [t.style, runTestsConvention(lang, "`sbt test`"), t.immutability],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Scala)",
-      body: `Revisa el diff actual buscando bugs, usos innecesarios de mutabilidad y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Scala)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Scala)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Scala)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Scala)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Scala)", body: testingBody(lang, runner) },
   ];
 }
 

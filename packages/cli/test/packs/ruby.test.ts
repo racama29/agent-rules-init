@@ -36,7 +36,7 @@ describe("rubyPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = rubyPack.detect(baseSignals({ gemfile: "gem 'rake'" }))!;
-    const templates = rubyPack.promptTemplates(detection);
+    const templates = rubyPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

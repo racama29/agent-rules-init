@@ -40,7 +40,7 @@ describe("phpPack", () => {
     const detection = phpPack.detect(
       baseSignals({ composerJson: { require: {}, requireDev: {} } })
     )!;
-    const templates = phpPack.promptTemplates(detection);
+    const templates = phpPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

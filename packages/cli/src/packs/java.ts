@@ -6,6 +6,16 @@ import type {
   RepoSignals,
   RuleSet,
 } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.pomXml ?? signals.buildGradle;
@@ -33,40 +43,46 @@ function detect(signals: RepoSignals): DetectionResult | null {
   return { packId: "java", language: "Java", framework, packageManager, testRunner };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Java${framework !== "none" ? ` con ${framework}` : ""} (${detection.packageManager?.value}).`,
-    conventions: [
-      "Sigue las convenciones de nombrado estándar de Java (PascalCase para clases, camelCase para métodos).",
-      `Ejecuta los tests con ${detection.packageManager?.value === "maven" ? "mvn test" : "gradle test"} antes de terminar una tarea.`,
-      "No añadas dependencias nuevas sin declararlas en el gestor de build existente.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { naming: string; deps: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    naming: "Sigue las convenciones de nombrado estándar de Java (PascalCase para clases, camelCase para métodos).",
+    deps: "No añadas dependencias nuevas sin declararlas en el gestor de build existente.",
+    arch: [
       "Respeta la separación en capas (controller/service/repository) si el proyecto ya la usa.",
       "Prefiere inyección de dependencias sobre instanciación manual cuando el framework ya la ofrezca.",
     ],
+    reviewFocus: "null-safety",
+  },
+  en: {
+    naming: "Follow standard Java naming conventions (PascalCase for classes, camelCase for methods).",
+    deps: "Do not add new dependencies without declaring them in the existing build tool.",
+    arch: [
+      "Respect the layered separation (controller/service/repository) if the project already uses it.",
+      "Prefer dependency injection over manual instantiation when the framework already provides it.",
+    ],
+    reviewFocus: "null-safety",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const testCmd = detection.packageManager?.value === "maven" ? "mvn test" : "gradle test";
+  return {
+    summary: summarySentence(lang, "Java", framework, detection.packageManager?.value),
+    conventions: [t.naming, runTestsConvention(lang, testCmd), t.deps],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Java)",
-      body: `Revisa el diff actual buscando bugs, null-safety y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Java)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Java)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Java)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Java)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Java)", body: testingBody(lang, runner) },
   ];
 }
 

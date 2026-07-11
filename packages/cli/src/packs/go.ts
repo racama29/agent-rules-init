@@ -1,4 +1,13 @@
 import type { DetectionResult, Pack, PromptTemplate, RepoSignals, RuleSet } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["gin-gonic/gin", "gin"],
@@ -40,40 +49,44 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Go${framework !== "none" ? ` con ${framework}` : ""} (go modules).`,
-    conventions: [
-      "Sigue el formato estándar de `gofmt`; no introduzcas estilos alternativos.",
-      "Ejecuta los tests con `go test ./...` antes de terminar una tarea.",
-      "Maneja los errores explícitamente (`if err != nil`); no los ignores en silencio.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; errors: string; arch: string[]; reviewFocus: string }> = {
+  es: {
+    style: "Sigue el formato estándar de `gofmt`; no introduzcas estilos alternativos.",
+    errors: "Maneja los errores explícitamente (`if err != nil`); no los ignores en silencio.",
+    arch: [
       "Mantén los paquetes con una responsabilidad clara; evita paquetes `util` genéricos.",
       "Declara toda dependencia nueva vía `go get` y mantén `go.mod`/`go.sum` sincronizados.",
     ],
+    reviewFocus: "manejo de errores omitido",
+  },
+  en: {
+    style: "Follow the standard `gofmt` formatting; do not introduce alternative styles.",
+    errors: "Handle errors explicitly (`if err != nil`); never ignore them silently.",
+    arch: [
+      "Keep packages single-purpose; avoid generic `util` packages.",
+      "Declare every new dependency via `go get` and keep `go.mod`/`go.sum` in sync.",
+    ],
+    reviewFocus: "missing error handling",
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Go", framework, "go modules"),
+    conventions: [t.style, runTestsConvention(lang, "`go test ./...`"), t.errors],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Go)",
-      body: `Revisa el diff actual buscando bugs, manejo de errores omitido y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Go)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Go)",
-      body: `Escribe tests con \`go test\` para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Go)", body: reviewBody(lang, t.reviewFocus, framework) },
+    { id: "refactor", title: "Refactor (Go)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Go)", body: testingBody(lang, "`go test`") },
   ];
 }
 

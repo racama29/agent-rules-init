@@ -55,7 +55,7 @@ describe("swiftPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = swiftPack.detect(baseSignals({ packageSwift: 'let package = Package(name: "app")' }))!;
-    const templates = swiftPack.promptTemplates(detection);
+    const templates = swiftPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

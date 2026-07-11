@@ -51,7 +51,7 @@ describe("cppPack", () => {
     const detection = cppPack.detect(
       baseSignals({ cmakeLists: "cmake_minimum_required(VERSION 3.20)\nproject(app)\n" })
     )!;
-    const templates = cppPack.promptTemplates(detection);
+    const templates = cppPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

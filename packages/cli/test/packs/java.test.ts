@@ -45,13 +45,13 @@ describe("javaPack", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
     expect(detection.testRunner?.value).toBe("unknown");
 
-    const testing = javaPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    const testing = javaPack.promptTemplates(detection, "es").find((t) => t.id === "testing")!;
     expect(testing.body).not.toContain("unknown");
   });
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = javaPack.detect(baseSignals({ pomXml: "<artifactId>plain-app</artifactId>" }))!;
-    const templates = javaPack.promptTemplates(detection);
+    const templates = javaPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

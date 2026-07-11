@@ -45,7 +45,7 @@ describe("kotlinPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = kotlinPack.detect(baseSignals({ buildGradle: 'plugins {\n    kotlin("jvm")\n}' }))!;
-    const templates = kotlinPack.promptTemplates(detection);
+    const templates = kotlinPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

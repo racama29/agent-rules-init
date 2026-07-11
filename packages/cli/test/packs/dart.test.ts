@@ -38,7 +38,7 @@ describe("dartPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = dartPack.detect(baseSignals({ pubspecYaml: "name: my_cli_app\n" }))!;
-    const templates = dartPack.promptTemplates(detection);
+    const templates = dartPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

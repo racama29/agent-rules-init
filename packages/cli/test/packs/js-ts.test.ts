@@ -25,7 +25,7 @@ describe("jsTsPack", () => {
     )!;
     expect(detection.testRunner?.value).toBe("unknown");
 
-    const testing = jsTsPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    const testing = jsTsPack.promptTemplates(detection, "es").find((t) => t.id === "testing")!;
     expect(testing.body).not.toContain("unknown");
   });
 
@@ -179,7 +179,7 @@ describe("jsTsPack", () => {
         },
       })
     )!;
-    const rules = jsTsPack.rules(detection);
+    const rules = jsTsPack.rules(detection, "es");
     expect(rules.summary).toContain("react");
   });
 
@@ -194,7 +194,7 @@ describe("jsTsPack", () => {
         },
       })
     )!;
-    const rules = jsTsPack.rules(detection);
+    const rules = jsTsPack.rules(detection, "es");
     expect(rules.conventions.join(" ")).not.toContain("TypeScript");
     expect(rules.conventions.join(" ")).toContain("CommonJS");
   });
@@ -210,7 +210,7 @@ describe("jsTsPack", () => {
         },
       })
     )!;
-    const rules = jsTsPack.rules(detection);
+    const rules = jsTsPack.rules(detection, "es");
     expect(rules.conventions.join(" ")).toContain("TypeScript");
     expect(rules.conventions.join(" ")).toContain("módulos ES");
   });
@@ -221,7 +221,7 @@ describe("jsTsPack", () => {
         packageJson: { dependencies: {}, devDependencies: {}, scripts: {}, moduleType: "commonjs" },
       })
     )!;
-    const templates = jsTsPack.promptTemplates(detection);
+    const templates = jsTsPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

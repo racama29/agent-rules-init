@@ -42,7 +42,7 @@ describe("goPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = goPack.detect(baseSignals({ goMod: "module example.com/app\n" }))!;
-    const templates = goPack.promptTemplates(detection);
+    const templates = goPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

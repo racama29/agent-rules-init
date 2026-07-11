@@ -6,6 +6,16 @@ import type {
   RepoSignals,
   RuleSet,
 } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.gemfile;
@@ -33,40 +43,48 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto Ruby${framework !== "none" ? ` con ${framework}` : ""} (bundler).`,
-    conventions: [
-      "Sigue la guía de estilo Ruby estándar (snake_case para métodos/variables, CamelCase para clases).",
-      `Ejecuta los tests con ${detection.testRunner?.value === "rspec" ? "bundle exec rspec" : detection.testRunner?.value === "minitest" ? "bundle exec rake test" : "el test runner del proyecto"} antes de terminar una tarea.`,
-      "Declara toda dependencia nueva en el Gemfile, nunca instales una gema sin registrarla.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
+  es: {
+    style: "Sigue la guía de estilo Ruby estándar (snake_case para métodos/variables, CamelCase para clases).",
+    deps: "Declara toda dependencia nueva en el Gemfile, nunca instales una gema sin registrarla.",
+    arch: [
       "Respeta la estructura MVC del framework si el proyecto ya la sigue.",
       "Evita lógica de negocio en los controladores cuando el proyecto ya use capas de servicio.",
     ],
+  },
+  en: {
+    style: "Follow the standard Ruby style guide (snake_case for methods/variables, CamelCase for classes).",
+    deps: "Declare every new dependency in the Gemfile; never install a gem without registering it.",
+    arch: [
+      "Respect the framework's MVC structure if the project already follows it.",
+      "Avoid business logic in controllers when the project already uses service layers.",
+    ],
+  },
+};
+
+function testCommand(detection: DetectionResult, lang: Lang): string {
+  if (detection.testRunner?.value === "rspec") return "bundle exec rspec";
+  if (detection.testRunner?.value === "minitest") return "bundle exec rake test";
+  return unknownRunnerLabel(lang);
+}
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  return {
+    summary: summarySentence(lang, "Ruby", framework, "bundler"),
+    conventions: [t.style, runTestsConvention(lang, testCommand(detection, lang)), t.deps],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner!.value : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (Ruby)",
-      body: `Revisa el diff actual buscando bugs y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (Ruby)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (Ruby)",
-      body: `Escribe tests con ${detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (Ruby)", body: reviewBody(lang, "", framework) },
+    { id: "refactor", title: "Refactor (Ruby)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (Ruby)", body: testingBody(lang, runner) },
   ];
 }
 

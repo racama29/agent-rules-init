@@ -39,7 +39,7 @@ describe("rustPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = rustPack.detect(baseSignals({ cargoToml: '[package]\nname = "app"\n' }))!;
-    const templates = rustPack.promptTemplates(detection);
+    const templates = rustPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

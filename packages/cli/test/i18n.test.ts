@@ -40,6 +40,8 @@ describe("shared builders", () => {
     expect(runTestsConvention("en", "pytest")).toBe("Run the tests with pytest before finishing a task.");
     expect(reviewBody("en", "incorrect exception handling", "flask")).toContain("incorrect exception handling");
     expect(reviewBody("es", "manejo de excepciones incorrecto", "flask")).toContain("Señala solo problemas concretos");
+    expect(reviewBody("es", "", "rails")).toContain("buscando bugs y desviaciones");
+    expect(reviewBody("en", "", "rails")).toContain("looking for bugs and deviations");
     expect(refactorBody("en")).toContain("without changing observable behavior");
     expect(testingBody("es", "pytest")).toContain("camino feliz");
     expect(testingBody("en", "pytest")).toContain("happy path");

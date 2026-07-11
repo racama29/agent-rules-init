@@ -35,7 +35,7 @@ describe("rPack", () => {
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = rPack.detect(baseSignals({ rDescription: "Package: myapp\n" }))!;
-    const templates = rPack.promptTemplates(detection);
+    const templates = rPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });

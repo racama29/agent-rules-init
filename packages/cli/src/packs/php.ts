@@ -6,6 +6,16 @@ import type {
   RepoSignals,
   RuleSet,
 } from "../core/types.js";
+import {
+  refactorBody,
+  reviewBody,
+  runTestsConvention,
+  summarySentence,
+  testingBody,
+  unknownFrameworkLabel,
+  unknownRunnerLabel,
+  type Lang,
+} from "../core/i18n.js";
 
 const FRAMEWORKS: Record<string, string> = {
   "laravel/framework": "laravel",
@@ -38,40 +48,44 @@ function detect(signals: RepoSignals): DetectionResult | null {
   };
 }
 
-function rules(detection: DetectionResult): RuleSet {
-  const framework = detection.framework?.value ?? "none";
-  return {
-    summary: `Proyecto PHP${framework !== "none" ? ` con ${framework}` : ""} (composer).`,
-    conventions: [
-      "Sigue PSR-12 para el estilo de código.",
-      `Ejecuta los tests con ${detection.testRunner?.value === "phpunit" ? "vendor/bin/phpunit" : "el test runner del proyecto"} antes de terminar una tarea.`,
-      "Declara toda dependencia nueva en composer.json, nunca la instales sin registrarla.",
-    ],
-    architectureNotes: [
+const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
+  es: {
+    style: "Sigue PSR-12 para el estilo de código.",
+    deps: "Declara toda dependencia nueva en composer.json, nunca la instales sin registrarla.",
+    arch: [
       "Respeta la estructura MVC del framework si el proyecto ya la sigue.",
       "Evita lógica de negocio en los controladores cuando el proyecto ya use capas de servicio.",
     ],
+  },
+  en: {
+    style: "Follow PSR-12 for code style.",
+    deps: "Declare every new dependency in composer.json; never install one without registering it.",
+    arch: [
+      "Respect the framework's MVC structure if the project already follows it.",
+      "Avoid business logic in controllers when the project already uses service layers.",
+    ],
+  },
+};
+
+function rules(detection: DetectionResult, lang: Lang): RuleSet {
+  const t = TEXTS[lang];
+  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const testCmd =
+    detection.testRunner?.value === "phpunit" ? "vendor/bin/phpunit" : unknownRunnerLabel(lang);
+  return {
+    summary: summarySentence(lang, "PHP", framework, "composer"),
+    conventions: [t.style, runTestsConvention(lang, testCmd), t.deps],
+    architectureNotes: t.arch,
   };
 }
 
-function promptTemplates(detection: DetectionResult): PromptTemplate[] {
-  const framework = detection.framework?.value ?? "el framework del proyecto";
+function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
+  const framework = detection.framework?.value !== "none" ? detection.framework!.value : unknownFrameworkLabel(lang);
+  const runner = detection.testRunner?.value === "phpunit" ? "PHPUnit" : unknownRunnerLabel(lang);
   return [
-    {
-      id: "review",
-      title: "Code Review (PHP)",
-      body: `Revisa el diff actual buscando bugs y desviaciones de las convenciones de ${framework}. Señala solo problemas concretos con línea de archivo.`,
-    },
-    {
-      id: "refactor",
-      title: "Refactor (PHP)",
-      body: `Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar comportamiento observable.`,
-    },
-    {
-      id: "testing",
-      title: "Testing (PHP)",
-      body: `Escribe tests con ${detection.testRunner?.value === "phpunit" ? "PHPUnit" : "el test runner del proyecto"} para el código señalado. Cubre el camino feliz y al menos un caso límite.`,
-    },
+    { id: "review", title: "Code Review (PHP)", body: reviewBody(lang, "", framework) },
+    { id: "refactor", title: "Refactor (PHP)", body: refactorBody(lang) },
+    { id: "testing", title: "Testing (PHP)", body: testingBody(lang, runner) },
   ];
 }
 

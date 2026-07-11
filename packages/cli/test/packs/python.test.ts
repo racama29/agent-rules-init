@@ -50,16 +50,16 @@ describe("pythonPack", () => {
     const detection = pythonPack.detect(baseSignals({ requirementsTxt: "some-random-lib==1.0" }))!;
     expect(detection.testRunner?.value).toBe("unknown");
 
-    const ruleSet = pythonPack.rules(detection);
+    const ruleSet = pythonPack.rules(detection, "es");
     expect(ruleSet.conventions.join("\n")).not.toContain("unknown");
 
-    const testing = pythonPack.promptTemplates(detection).find((t) => t.id === "testing")!;
+    const testing = pythonPack.promptTemplates(detection, "es").find((t) => t.id === "testing")!;
     expect(testing.body).not.toContain("unknown");
   });
 
   it("produces review, refactor and testing prompt templates", () => {
     const detection = pythonPack.detect(baseSignals({ requirementsTxt: "flask" }))!;
-    const templates = pythonPack.promptTemplates(detection);
+    const templates = pythonPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
   });
 });
