@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { pythonPack } from "../../src/packs/python.js";
 import type { RepoSignals } from "../../src/core/types.js";
+import { buildRepoFacts } from "../../src/core/repo-facts.js";
 
 function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };
@@ -69,5 +70,40 @@ describe("pythonPack", () => {
     const detection = pythonPack.detect(baseSignals({ requirementsTxt: "flask" }))!;
     const templates = pythonPack.promptTemplates(detection, "es");
     expect(templates.map((t) => t.id).sort()).toEqual(["refactor", "review", "testing"]);
+  });
+});
+
+function flaskLikeSignalsAndDetection() {
+  const signals = baseSignals({
+    files: ["src/fixture_app/cli.py", "tests/test_cli.py", "uv.lock", "tox.ini"],
+    hasFile: (p) => p === "uv.lock",
+    pyprojectToml:
+      '[project]\nname = "app"\ndependencies = ["flask"]\n\n[project.optional-dependencies]\ndev = ["pytest"]\n',
+    toxIni: "[tox]\nenv_list = py311, style\n",
+  });
+  const detection = pythonPack.detect(signals)!;
+  const ctx = { facts: buildRepoFacts(signals, "en") };
+  return { detection, ctx };
+}
+
+describe("enriched python prompts", () => {
+  it("review prompt cites the uv-based flow and real paths", () => {
+    const { detection, ctx } = flaskLikeSignalsAndDetection();
+    const review = pythonPack.promptTemplates(detection, "en", ctx).find((t) => t.id === "review")!;
+    expect(review.body).toContain("`uv run pytest`");
+    expect(review.body).toContain("`tests/`");
+    expect(review.body).toMatch(/tox/);
+  });
+
+  it("rules recommend the canonical command, not just the runner name", () => {
+    const { detection, ctx } = flaskLikeSignalsAndDetection();
+    const ruleSet = pythonPack.rules(detection, "en", ctx);
+    expect(ruleSet.conventions.join("\n")).toContain("uv run pytest");
+    expect(ruleSet.conventions.join("\n")).not.toMatch(/with pytest before/);
+  });
+
+  it("prompts still render without a context", () => {
+    const { detection } = flaskLikeSignalsAndDetection();
+    expect(pythonPack.promptTemplates(detection, "en")).toHaveLength(3);
   });
 });

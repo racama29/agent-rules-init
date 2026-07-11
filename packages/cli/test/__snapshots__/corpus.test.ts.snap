@@ -276,7 +276,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from fastapi conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (fastapi). Pay special attention to Pydantic models, async dependencies and declared response codes. Also look for bugs: incorrect exception handling. Report only concrete findings with file and line references.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
@@ -332,7 +332,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from fastapi conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (fastapi). Pay special attention to Pydantic models, async dependencies and declared response codes. Also look for bugs: incorrect exception handling. Report only concrete findings with file and line references.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
@@ -425,7 +425,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de fastapi. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (fastapi). Presta especial atención a los modelos Pydantic, las dependencias async y los códigos de respuesta declarados. Busca también bugs: manejo de excepciones incorrecto. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
@@ -481,7 +481,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de fastapi. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (fastapi). Presta especial atención a los modelos Pydantic, las dependencias async y los códigos de respuesta declarados. Busca también bugs: manejo de excepciones incorrecto. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
@@ -1198,7 +1198,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from fastapi conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (fastapi). Pay special attention to Pydantic models, async dependencies and declared response codes. Also look for bugs: incorrect exception handling. Report only concrete findings with file and line references.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
@@ -1226,7 +1226,7 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from fastapi conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (fastapi). Pay special attention to Pydantic models, async dependencies and declared response codes. Also look for bugs: incorrect exception handling. Report only concrete findings with file and line references.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
@@ -1275,7 +1275,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de fastapi. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (fastapi). Presta especial atención a los modelos Pydantic, las dependencias async y los códigos de respuesta declarados. Busca también bugs: manejo de excepciones incorrecto. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
@@ -1303,7 +1303,7 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de fastapi. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (fastapi). Presta especial atención a los modelos Pydantic, las dependencias async y los códigos de respuesta declarados. Busca también bugs: manejo de excepciones incorrecto. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
@@ -1352,11 +1352,11 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from flask conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (flask). Run \`uv run pytest\` before approving the review. The full environment matrix runs through tox (\`tox.ini\`). Pay special attention to application/request context, blueprints and HTTP error handling. Also look for bugs: incorrect exception handling. Tests live under \`tests/\`. Report only concrete findings with file and line references.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
-Write tests with pytest for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with pytest for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`uv run pytest\` before finishing. Place new tests under \`tests/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -1368,7 +1368,7 @@ Python project using flask.
 
 ### Conventions
 - Follow PEP 8; use type hints on public functions.
-- Run the tests with pytest before finishing a task.
+- Run the tests with uv run pytest before finishing a task.
 - Do not introduce new dependencies without adding them to the existing dependency manifest.
 
 ### Architecture
@@ -1400,11 +1400,11 @@ Propose refactors that reduce duplication and improve readability without changi
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Review the current diff looking for bugs, incorrect exception handling and deviations from flask conventions. Point out only concrete issues with file and line.
+Review the current diff against this repository's Python conventions (flask). Run \`uv run pytest\` before approving the review. The full environment matrix runs through tox (\`tox.ini\`). Pay special attention to application/request context, blueprints and HTTP error handling. Also look for bugs: incorrect exception handling. Tests live under \`tests/\`. Report only concrete findings with file and line references.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
-Write tests with pytest for the highlighted code. Cover the happy path and at least one edge case.
+Write tests with pytest for the highlighted code. Cover the happy path and at least one edge case. Verify the suite with \`uv run pytest\` before finishing. Place new tests under \`tests/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -1416,7 +1416,7 @@ Python project using flask.
 
 ### Conventions
 - Follow PEP 8; use type hints on public functions.
-- Run the tests with pytest before finishing a task.
+- Run the tests with uv run pytest before finishing a task.
 - Do not introduce new dependencies without adding them to the existing dependency manifest.
 
 ### Architecture
@@ -1452,7 +1452,7 @@ Python project using flask.
 
 ### Conventions
 - Follow PEP 8; use type hints on public functions.
-- Run the tests with pytest before finishing a task.
+- Run the tests with uv run pytest before finishing a task.
 - Do not introduce new dependencies without adding them to the existing dependency manifest.
 
 ### Architecture
@@ -1489,11 +1489,11 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".claude/commands/python-review.generated.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de flask. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (flask). Ejecuta \`uv run pytest\` antes de dar por buena la revisión. La matriz completa de entornos se ejecuta con tox (\`tox.ini\`). Presta especial atención al contexto de aplicación/petición, los blueprints y el manejo de errores HTTP. Busca también bugs: manejo de excepciones incorrecto. Los tests viven en \`tests/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".claude/commands/python-testing.generated.md": "# Testing (Python)
 
-Escribe tests con pytest para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con pytest para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`uv run pytest\` antes de terminar. Coloca los tests nuevos en \`tests/\`.
 ",
   ".github/copilot-instructions.generated.md": "# Copilot Instructions
 
@@ -1505,7 +1505,7 @@ Proyecto Python con flask.
 
 ### Convenciones
 - Sigue PEP 8; usa type hints en funciones públicas.
-- Ejecuta los tests con pytest antes de terminar una tarea.
+- Ejecuta los tests con uv run pytest antes de terminar una tarea.
 - No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.
 
 ### Arquitectura
@@ -1537,11 +1537,11 @@ Propón refactors que reduzcan duplicación y mejoren la legibilidad sin cambiar
 ",
   ".github/prompts/python-review.generated.prompt.md": "# Code Review (Python)
 
-Revisa el diff actual buscando bugs, manejo de excepciones incorrecto y desviaciones de las convenciones de flask. Señala solo problemas concretos con línea de archivo.
+Revisa el diff actual contra las convenciones Python de este repositorio (flask). Ejecuta \`uv run pytest\` antes de dar por buena la revisión. La matriz completa de entornos se ejecuta con tox (\`tox.ini\`). Presta especial atención al contexto de aplicación/petición, los blueprints y el manejo de errores HTTP. Busca también bugs: manejo de excepciones incorrecto. Los tests viven en \`tests/\`. Señala solo hallazgos concretos con archivo y línea.
 ",
   ".github/prompts/python-testing.generated.prompt.md": "# Testing (Python)
 
-Escribe tests con pytest para el código señalado. Cubre el camino feliz y al menos un caso límite.
+Escribe tests con pytest para el código señalado. Cubre el camino feliz y al menos un caso límite. Verifica la suite con \`uv run pytest\` antes de terminar. Coloca los tests nuevos en \`tests/\`.
 ",
   "AGENTS.generated.md": "# AGENTS.md
 
@@ -1553,7 +1553,7 @@ Proyecto Python con flask.
 
 ### Convenciones
 - Sigue PEP 8; usa type hints en funciones públicas.
-- Ejecuta los tests con pytest antes de terminar una tarea.
+- Ejecuta los tests con uv run pytest antes de terminar una tarea.
 - No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.
 
 ### Arquitectura
@@ -1589,7 +1589,7 @@ Proyecto Python con flask.
 
 ### Convenciones
 - Sigue PEP 8; usa type hints en funciones públicas.
-- Ejecuta los tests con pytest antes de terminar una tarea.
+- Ejecuta los tests con uv run pytest antes de terminar una tarea.
 - No introduzcas dependencias nuevas sin añadirlas al manifiesto de dependencias existente.
 
 ### Arquitectura
