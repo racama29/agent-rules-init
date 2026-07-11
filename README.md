@@ -1,18 +1,18 @@
 # agent-rules-init
 
-La mayoría de asistentes de IA (Claude Code, Codex, Copilot, Cursor) se usan como chat genérico porque configurarlos bien — `CLAUDE.md`, `AGENTS.md`, reglas de arquitectura, prompts de review — es trabajo manual que casi nadie hace.
+Most AI coding assistants (Claude Code, Codex, Copilot, Cursor) get used as generic chat because configuring them properly — `CLAUDE.md`, `AGENTS.md`, architecture rules, review prompts — is manual work almost nobody does.
 
-`agent-rules-init` genera esos archivos **a partir de lo que tu repo ya es**: lee tus manifiestos (`package.json`, `pyproject.toml`/`environment.yml`, `pom.xml`/`build.gradle(.kts)`, `composer.json`, `Gemfile`, `go.mod`, `Cargo.toml`, `.csproj`, `Package.swift`, `pubspec.yaml`, `CMakeLists.txt`/`Makefile`...), detecta framework, test runner y gestor de dependencias, y solo pregunta lo que no puede inferir con confianza.
+`agent-rules-init` generates those files **from what your repo already is**: it reads your manifests (`package.json`, `pyproject.toml`/`environment.yml`, `pom.xml`/`build.gradle(.kts)`, `composer.json`, `Gemfile`, `go.mod`, `Cargo.toml`, `.csproj`, `Package.swift`, `pubspec.yaml`, `CMakeLists.txt`/`Makefile`...), detects the framework, test runner and package manager, and only asks what it cannot infer with confidence.
 
-## Uso
+## Usage
 
-Desde la raíz de tu repo:
+From the root of your repo:
 
 ```bash
 npx agent-rules-init
 ```
 
-El CLI escanea el repo, detecta el/los stack(s) presentes leyendo tus manifiestos, y genera un conjunto de archivos **sin sobrescribir nunca nada existente** — todo se crea con el sufijo `.generated.`:
+The CLI scans the repo, detects the stack(s) present, and generates a set of files **without ever overwriting anything** — everything is created with the `.generated.` suffix:
 
 - `CLAUDE.generated.md`
 - `AGENTS.generated.md`
@@ -20,35 +20,52 @@ El CLI escanea el repo, detecta el/los stack(s) presentes leyendo tus manifiesto
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
-(`<stack>` es uno de los 15 listados abajo — si tu repo mezcla varios, se genera un juego de prompts por cada uno).
+(`<stack>` is one of the 15 listed below — if your repo mixes several, one set of prompts is generated per stack.)
 
-Si algún dato no se puede inferir con confianza (p. ej. el framework), el CLI te hará una pregunta puntual antes de generar los archivos.
+Besides per-stack advice, the generated files include **facts extracted from your repo**:
 
-**Último paso, manual a propósito:** revisa el contenido generado y, cuando estés conforme, quita el sufijo `.generated` del nombre (`CLAUDE.generated.md` → `CLAUDE.md`, etc.) — los asistentes de IA solo leen el nombre final, no el generado. Esto es intencional: así nunca se sobrescribe silenciosamente algo que ya tenías afinado a mano.
+- **Repo commands** — the real build/test/lint commands declared in `package.json` scripts, `composer.json` scripts, `Makefile` targets, `mix.exs` aliases and `tox.ini` envs.
+- **Structure** — top-level directories, annotated only when their meaning is unambiguous.
+- **What CI runs** — the `run:` steps from your `.github/workflows/*.yml` (read locally; the CLI never touches the network).
 
-Si tienes `claude` o `codex` instalados y autenticados, el CLI te ofrece (opcional, nunca automático) usar tu propia sesión para pulir la redacción final.
+If something cannot be inferred with confidence (e.g. the framework), the CLI asks you one targeted question before generating the files.
 
-## Stacks soportados
+**Last step, manual on purpose:** review the generated content and, once you are happy with it, drop the `.generated` suffix (`CLAUDE.generated.md` → `CLAUDE.md`, etc.) — AI assistants only read the final name. This is intentional: nothing you hand-tuned ever gets silently overwritten.
 
-| Stack | Frameworks detectados | Estado |
+If you have `claude` or `codex` installed and authenticated, the CLI offers (optional, never automatic) to use your own session to polish the final wording.
+
+## Options
+
+```bash
+npx agent-rules-init             # scan the current directory
+npx agent-rules-init --lang en   # force the content language (es|en); defaults to your system locale
+npx agent-rules-init --help      # show help
+npx agent-rules-init --version   # show the version
+```
+
+All generated content and CLI messages are available in **English and Spanish**. By default the language is detected from your system locale (`es-*` → Spanish, anything else → English).
+
+## Supported stacks
+
+| Stack | Detected frameworks | Status |
 |---|---|---|
-| JavaScript / TypeScript | React, Next.js, Vue, Angular, Svelte, Express, NestJS, Fastify, Koa | ✅ estable |
-| Python | FastAPI, Django, Flask (pip, Poetry o Conda vía `environment.yml`) | ✅ estable |
-| Java | Spring (Maven o Gradle) | ✅ estable |
-| PHP | Laravel, Symfony, CodeIgniter | ✅ estable |
-| Ruby | Rails, Sinatra | ✅ estable |
-| Go | Gin, Echo, Fiber, Chi | ✅ estable |
-| Rust | Actix Web, Axum, Rocket | ✅ estable |
-| C# / .NET | ASP.NET Core | ✅ estable |
-| Kotlin | Ktor, Android, Spring | ✅ estable |
-| Swift | Vapor | ✅ estable |
-| Dart / Flutter | Flutter, Shelf | ✅ estable |
-| C / C++ | Qt, Boost, SDL2 | ✅ estable |
-| Elixir | Phoenix | ✅ estable |
-| Scala | Play, Akka | ✅ estable |
-| R | Shiny, Plumber | ✅ estable |
+| JavaScript / TypeScript | React, Next.js, Vue, Angular, Svelte, Express, NestJS, Fastify, Koa | ✅ stable |
+| Python | FastAPI, Django, Flask (pip, Poetry or Conda via `environment.yml`) | ✅ stable |
+| Java | Spring (Maven or Gradle) | ✅ stable |
+| PHP | Laravel, Symfony, CodeIgniter | ✅ stable |
+| Ruby | Rails, Sinatra | ✅ stable |
+| Go | Gin, Echo, Fiber, Chi | ✅ stable |
+| Rust | Actix Web, Axum, Rocket | ✅ stable |
+| C# / .NET | ASP.NET Core | ✅ stable |
+| Kotlin | Ktor, Android, Spring | ✅ stable |
+| Swift | Vapor | ✅ stable |
+| Dart / Flutter | Flutter, Shelf | ✅ stable |
+| C / C++ | Qt, Boost, SDL2 | ✅ stable |
+| Elixir | Phoenix | ✅ stable |
+| Scala | Play, Akka | ✅ stable |
+| R | Shiny, Plumber | ✅ stable |
 
-## Desarrollo local
+## Local development
 
 ```bash
 npm install
@@ -56,10 +73,20 @@ npm run build --workspaces --if-present
 npm run test --workspaces --if-present
 ```
 
-## Contribuir
+## Contributing
 
-Añadir soporte a un stack nuevo es implementar la interfaz `Pack` en un archivo dentro de `packages/cli/src/packs/` — no hace falta crear ni publicar ningún paquete npm nuevo. Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) y [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Adding support for a new stack means implementing the `Pack` interface in a file under `packages/cli/src/packs/` — no new npm package needed. See [`docs/writing-a-pack.md`](docs/writing-a-pack.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Licencia
+## En español
 
-MIT — ver [`LICENSE`](LICENSE).
+`agent-rules-init` genera `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md` y prompts de review/refactor/testing a partir del stack detectado en tu repo, más los hechos reales del proyecto (comandos declarados, estructura, lo que ejecuta CI). Todo se crea con sufijo `.generated.` y nunca sobrescribe nada: revisa y quita el sufijo para activar.
+
+En sistemas con locale en español todo el contenido y los mensajes salen en español automáticamente; usa `--lang es` o `--lang en` para forzar el idioma.
+
+```bash
+npx agent-rules-init
+```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

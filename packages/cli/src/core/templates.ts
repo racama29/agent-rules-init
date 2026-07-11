@@ -6,7 +6,8 @@ export interface RenderEntry {
   ruleSet: RuleSet;
 }
 
-function renderSection(entries: RenderEntry[]): string {
+function renderSection(entries: RenderEntry[], lang: Lang): string {
+  const ui = UI[lang];
   return entries
     .map(({ detection, ruleSet }) => {
       const conventions = ruleSet.conventions.map((c) => `- ${c}`).join("\n");
@@ -16,10 +17,10 @@ function renderSection(entries: RenderEntry[]): string {
         "",
         ruleSet.summary,
         "",
-        "### Convenciones",
+        `### ${ui.sections.conventions}`,
         conventions,
         "",
-        "### Arquitectura",
+        `### ${ui.sections.architecture}`,
         architecture,
       ].join("\n");
     })
@@ -65,7 +66,7 @@ function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts 
     "",
     UI[lang].generatedHeader,
     "",
-    renderSection(entries),
+    renderSection(entries, lang),
     ...(factsBlock ? ["", factsBlock] : []),
   ].join("\n");
 }

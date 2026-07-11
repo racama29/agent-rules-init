@@ -36,18 +36,22 @@ export function hasInteractiveTty(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-export const defaultPromptFn: PromptFn = async (message) => {
-  if (!hasInteractiveTty()) {
-    console.warn(UI[detectLang()].skippedQuestion(message));
-    return "";
-  }
-  const answer = await clack.text({ message });
-  if (clack.isCancel(answer)) {
-    clack.cancel(UI[detectLang()].cancelled);
-    process.exit(1);
-  }
-  return answer;
-};
+export function makeDefaultPromptFn(lang: Lang): PromptFn {
+  return async (message) => {
+    if (!hasInteractiveTty()) {
+      console.warn(UI[lang].skippedQuestion(message));
+      return "";
+    }
+    const answer = await clack.text({ message });
+    if (clack.isCancel(answer)) {
+      clack.cancel(UI[lang].cancelled);
+      process.exit(1);
+    }
+    return answer;
+  };
+}
+
+export const defaultPromptFn: PromptFn = (message) => makeDefaultPromptFn(detectLang())(message);
 
 export async function askQuestions(
   questions: Question[],

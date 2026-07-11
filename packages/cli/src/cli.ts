@@ -16,7 +16,7 @@ import {
   collectLowConfidenceQuestions,
   askQuestions,
   applyAnswers,
-  defaultPromptFn,
+  makeDefaultPromptFn,
   hasInteractiveTty,
   type PromptFn,
 } from "./core/prompt-engine.js";
@@ -64,9 +64,9 @@ export interface RunCliOptions {
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
-  const promptFn = options.promptFn ?? defaultPromptFn;
   const execFn = options.execFn ?? defaultExecFn;
   const lang = options.lang ?? detectLang();
+  const promptFn = options.promptFn ?? makeDefaultPromptFn(lang);
   const ui = UI[lang];
 
   const signals = scanRepo(rootPath);

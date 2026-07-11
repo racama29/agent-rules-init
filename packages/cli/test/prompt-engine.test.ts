@@ -4,6 +4,7 @@ import {
   askQuestions,
   applyAnswers,
   defaultPromptFn,
+  makeDefaultPromptFn,
   hasInteractiveTty,
 } from "../src/core/prompt-engine.js";
 import type { DetectionResult } from "../src/core/types.js";
@@ -130,5 +131,13 @@ describe("without an interactive TTY (e.g. Git Bash on Windows, CI, some VS Code
   it("defaultPromptFn resolves to an empty string instead of trying to render a prompt", async () => {
     const answer = await defaultPromptFn("¿Cuál framework?");
     expect(answer).toBe("");
+  });
+
+  it("makeDefaultPromptFn warns about the skipped question in the requested language", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const answer = await makeDefaultPromptFn("en")("Which framework?");
+    expect(answer).toBe("");
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("skipping the question"));
+    warnSpy.mockRestore();
   });
 });

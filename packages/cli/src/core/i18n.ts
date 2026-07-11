@@ -53,7 +53,7 @@ export function unknownFrameworkLabel(lang: Lang): string {
 
 export interface UiTexts {
   generatedHeader: string;
-  sections: { commands: string; structure: string; ci: string };
+  sections: { commands: string; structure: string; ci: string; conventions: string; architecture: string };
   andMore: (count: number, file?: string) => string;
   noStackFallback: string;
   question: (fieldLabel: string, language: string) => string;
@@ -82,6 +82,8 @@ export const UI: Record<Lang, UiTexts> = {
       commands: "Comandos del repo",
       structure: "Estructura",
       ci: "Lo que ejecuta CI (GitHub Actions)",
+      conventions: "Convenciones",
+      architecture: "Arquitectura",
     },
     andMore: (count, file) => (file ? `…y ${count} más en ${file}` : `…y ${count} más`),
     noStackFallback: "No se detectó ningún stack conocido. Completa este archivo manualmente.",
@@ -150,6 +152,8 @@ revisa su contenido y quita el sufijo para activarlos.`,
       commands: "Repo commands",
       structure: "Structure",
       ci: "What CI runs (GitHub Actions)",
+      conventions: "Conventions",
+      architecture: "Architecture",
     },
     andMore: (count, file) => (file ? `…and ${count} more in ${file}` : `…and ${count} more`),
     noStackFallback: "No known stack was detected. Fill in this file manually.",
