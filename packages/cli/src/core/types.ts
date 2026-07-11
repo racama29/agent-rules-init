@@ -101,12 +101,23 @@ export interface CiCommand {
   workflow: string; // nombre de archivo, p. ej. "ci.yml"
 }
 
+export interface CanonicalCommand {
+  kind: "test" | "lint" | "build" | "format" | "typecheck";
+  command: string;
+  /** Archivo o señal del que procede el comando, p. ej. `package.json`, `ci: ci.yml`, `mvnw`. */
+  source: string;
+  confidence: Confidence;
+  /** "." para la raíz del repo; ruta del workspace para unidades anidadas. */
+  scope: string;
+}
+
 export interface RepoFacts {
   commands: CommandEntry[];
   omittedCommands: { source: CommandSource; count: number }[];
   structure: DirEntry[];
   ciCommands: CiCommand[];
   omittedCiCount: number;
+  canonical: CanonicalCommand[];
 }
 
 export interface Pack {

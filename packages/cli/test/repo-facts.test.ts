@@ -317,6 +317,6 @@ describe("buildRepoFacts", () => {
 
   it("returns fully empty facts for an empty repo", () => {
     const facts = buildRepoFacts(baseSignals({}), "es");
-    expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0 });
+    expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [] });
   });
 });

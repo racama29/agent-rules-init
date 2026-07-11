@@ -1,5 +1,6 @@
 import { UI, type Lang } from "./i18n.js";
-import type { CommandSource, DetectionResult, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
+import type { DetectionResult, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
+import { SOURCE_FILES } from "./canonical-commands.js";
 
 export interface RenderEntry {
   detection: DetectionResult;
@@ -26,17 +27,6 @@ function renderSection(entries: RenderEntry[], lang: Lang): string {
     })
     .join("\n\n");
 }
-
-const SOURCE_FILES: Record<CommandSource, string> = {
-  npm: "package.json",
-  pnpm: "package.json",
-  yarn: "package.json",
-  bun: "package.json",
-  composer: "composer.json",
-  make: "Makefile",
-  mix: "mix.exs",
-  tox: "tox.ini",
-};
 
 export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
   const ui = UI[lang];

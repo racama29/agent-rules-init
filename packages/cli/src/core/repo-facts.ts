@@ -239,5 +239,6 @@ export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
     structure: extractStructure(signals, lang),
     ciCommands,
     omittedCiCount,
+    canonical: [],
   };
 }
