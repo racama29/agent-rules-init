@@ -61,6 +61,15 @@ describe("shared builders", () => {
     );
   });
 
+  it("falls back to a generic run-tests convention without naming a command", () => {
+    expect(runTestsConvention("en")).toBe(
+      "Run the repository's test suite before finishing a task."
+    );
+    expect(runTestsConvention("es")).toBe(
+      "Ejecuta la suite de tests del repositorio antes de terminar una tarea."
+    );
+  });
+
   it("exposes UI texts for both languages", () => {
     expect(UI.es.sections.commands).toBe("Comandos del repo");
     expect(UI.en.sections.commands).toBe("Repo commands");

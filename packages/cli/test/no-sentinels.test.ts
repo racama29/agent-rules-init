@@ -18,6 +18,7 @@ const CORPUS = [
   "node-react-vitest",
   "python-fastapi",
   "monorepo-js-python",
+  "node-plain",
 ] as const;
 
 describe("generated content contains no vague sentinels", () => {

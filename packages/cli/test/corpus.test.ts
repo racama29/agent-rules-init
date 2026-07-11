@@ -14,6 +14,7 @@ const CORPUS = [
   "node-react-vitest",
   "python-fastapi",
   "monorepo-js-python",
+  "node-plain",
 ] as const;
 
 async function renderCorpus(fixture: string, lang: Lang): Promise<Map<string, string>> {
