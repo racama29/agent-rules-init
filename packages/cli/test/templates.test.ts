@@ -29,9 +29,12 @@ const facts: RepoFacts = {
   structure: [{ dir: "src/", note: "código fuente" }, { dir: "weirddir/" }],
   ciCommands: [{ command: "npm ci", workflow: "ci.yml" }],
   omittedCiCount: 0,
+  canonical: [],
 };
 
-const emptyFacts: RepoFacts = { commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0 };
+const emptyFacts: RepoFacts = {
+  commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [],
+};
 
 describe("templates", () => {
   it("renders CLAUDE.md including each pack's summary and conventions", () => {
@@ -106,6 +109,20 @@ describe("templates", () => {
     expect(output).toContain("…and 4 more in package.json");
     expect(output).not.toContain("Comandos del repo");
     expect(output).not.toContain("Generado por");
+  });
+
+  it("renders a canonical commands section with provenance, high confidence only", () => {
+    const facts: RepoFacts = {
+      commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0,
+      canonical: [
+        { kind: "test", command: "npm test", source: "package.json", confidence: "high", scope: "." },
+        { kind: "build", command: "gradle build", source: "build.gradle", confidence: "low", scope: "." },
+      ],
+    };
+    const output = renderRepoFacts(facts, "en");
+    expect(output).toContain("## Canonical commands");
+    expect(output).toContain("- test: `npm test` (package.json)");
+    expect(output).not.toContain("gradle build");
   });
 
   it("does not collide when two different packs render the same template id", () => {

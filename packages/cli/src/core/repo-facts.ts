@@ -1,6 +1,7 @@
 import path from "node:path";
 import { parse } from "yaml";
 import { UI, type Lang } from "./i18n.js";
+import { selectCanonicalCommands } from "./canonical-commands.js";
 import type {
   CiCommand,
   CommandEntry,
@@ -239,6 +240,6 @@ export function buildRepoFacts(signals: RepoSignals, lang: Lang): RepoFacts {
     structure: extractStructure(signals, lang),
     ciCommands,
     omittedCiCount,
-    canonical: [],
+    canonical: selectCanonicalCommands(signals, kept, ciCommands),
   };
 }

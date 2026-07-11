@@ -60,7 +60,14 @@ export function testingBody(lang: Lang, runner?: string): string {
 
 export interface UiTexts {
   generatedHeader: string;
-  sections: { commands: string; structure: string; ci: string; conventions: string; architecture: string };
+  sections: {
+    commands: string;
+    structure: string;
+    ci: string;
+    conventions: string;
+    architecture: string;
+    canonical: string;
+  };
   andMore: (count: number, file?: string) => string;
   noStackFallback: string;
   question: (fieldLabel: string, language: string) => string;
@@ -93,6 +100,7 @@ export const UI: Record<Lang, UiTexts> = {
       ci: "Lo que ejecuta CI (GitHub Actions)",
       conventions: "Convenciones",
       architecture: "Arquitectura",
+      canonical: "Comandos canónicos",
     },
     andMore: (count, file) => (file ? `…y ${count} más en ${file}` : `…y ${count} más`),
     noStackFallback: "No se detectó ningún stack conocido. Completa este archivo manualmente.",
@@ -172,6 +180,7 @@ revisa su contenido y quita el sufijo para activarlos.`,
       ci: "What CI runs (GitHub Actions)",
       conventions: "Conventions",
       architecture: "Architecture",
+      canonical: "Canonical commands",
     },
     andMore: (count, file) => (file ? `…and ${count} more in ${file}` : `…and ${count} more`),
     noStackFallback: "No known stack was detected. Fill in this file manually.",

@@ -31,6 +31,11 @@ Java project using spring (maven wrapper).
 - Respect the layered separation (controller/service/repository) if the project already uses it.
 - Prefer dependency injection over manual instantiation when the framework already provides it.
 
+## Canonical commands
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
+
 ## Structure
 
 - \`.github/\` — GitHub workflows and configuration
@@ -69,6 +74,11 @@ Java project using spring (maven wrapper).
 - Respect the layered separation (controller/service/repository) if the project already uses it.
 - Prefer dependency injection over manual instantiation when the framework already provides it.
 
+## Canonical commands
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
+
 ## Structure
 
 - \`.github/\` — GitHub workflows and configuration
@@ -94,6 +104,11 @@ Java project using spring (maven wrapper).
 ### Architecture
 - Respect the layered separation (controller/service/repository) if the project already uses it.
 - Prefer dependency injection over manual instantiation when the framework already provides it.
+
+## Canonical commands
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
 
 ## Structure
 
@@ -138,6 +153,11 @@ Proyecto Java con spring (maven wrapper).
 - Respeta la separación en capas (controller/service/repository) si el proyecto ya la usa.
 - Prefiere inyección de dependencias sobre instanciación manual cuando el framework ya la ofrezca.
 
+## Comandos canónicos
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
+
 ## Estructura
 
 - \`.github/\` — workflows y configuración de GitHub
@@ -176,6 +196,11 @@ Proyecto Java con spring (maven wrapper).
 - Respeta la separación en capas (controller/service/repository) si el proyecto ya la usa.
 - Prefiere inyección de dependencias sobre instanciación manual cuando el framework ya la ofrezca.
 
+## Comandos canónicos
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
+
 ## Estructura
 
 - \`.github/\` — workflows y configuración de GitHub
@@ -201,6 +226,11 @@ Proyecto Java con spring (maven wrapper).
 ### Arquitectura
 - Respeta la separación en capas (controller/service/repository) si el proyecto ya la usa.
 - Prefiere inyección de dependencias sobre instanciación manual cuando el framework ya la ofrezca.
+
+## Comandos canónicos
+
+- test: \`./mvnw -B verify\` (ci: build.yml)
+- build: \`./gradlew build\` (ci: build.yml)
 
 ## Estructura
 
@@ -542,6 +572,11 @@ JavaScript project using express.
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
 
+## Canonical commands
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
+
 ## Repo commands
 
 - \`npm test\` → \`mocha --recursive test/\` (package.json)
@@ -586,6 +621,11 @@ JavaScript project using express.
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
 
+## Canonical commands
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
+
 ## Repo commands
 
 - \`npm test\` → \`mocha --recursive test/\` (package.json)
@@ -617,6 +657,11 @@ JavaScript project using express.
 ### Architecture
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
+
+## Canonical commands
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
 
 ## Repo commands
 
@@ -667,6 +712,11 @@ Proyecto JavaScript con express.
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
 
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
+
 ## Comandos del repo
 
 - \`npm test\` → \`mocha --recursive test/\` (package.json)
@@ -711,6 +761,11 @@ Proyecto JavaScript con express.
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
 
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
+
 ## Comandos del repo
 
 - \`npm test\` → \`mocha --recursive test/\` (package.json)
@@ -742,6 +797,11 @@ Proyecto JavaScript con express.
 ### Arquitectura
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
+
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
+- lint: \`npm run lint\` (package.json)
 
 ## Comandos del repo
 
@@ -940,6 +1000,10 @@ JavaScript project using react.
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
 
+## Canonical commands
+
+- test: \`npm test\` (package.json)
+
 ## Repo commands
 
 - \`npm test\` → \`vitest run\` (package.json)",
@@ -971,6 +1035,10 @@ JavaScript project using react.
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
 
+## Canonical commands
+
+- test: \`npm test\` (package.json)
+
 ## Repo commands
 
 - \`npm test\` → \`vitest run\` (package.json)",
@@ -989,6 +1057,10 @@ JavaScript project using react.
 ### Architecture
 - Keep components/modules small and single-purpose.
 - Place tests next to the code they cover or in a mirrored \`test/\` directory, following what the repo already uses.
+
+## Canonical commands
+
+- test: \`npm test\` (package.json)
 
 ## Repo commands
 
@@ -1026,6 +1098,10 @@ Proyecto JavaScript con react.
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
 
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
+
 ## Comandos del repo
 
 - \`npm test\` → \`vitest run\` (package.json)",
@@ -1057,6 +1133,10 @@ Proyecto JavaScript con react.
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
 
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
+
 ## Comandos del repo
 
 - \`npm test\` → \`vitest run\` (package.json)",
@@ -1075,6 +1155,10 @@ Proyecto JavaScript con react.
 ### Arquitectura
 - Mantén los componentes/módulos pequeños y con una responsabilidad clara.
 - Coloca los tests junto al código que prueban o en un directorio \`test/\` espejo, según lo que ya use el repo.
+
+## Comandos canónicos
+
+- test: \`npm test\` (package.json)
 
 ## Comandos del repo
 
@@ -1267,6 +1351,10 @@ Python project using flask.
 - Keep business logic separate from the framework layer when the project already follows that pattern.
 - Use virtual environments; never install packages globally.
 
+## Canonical commands
+
+- test: \`uv run pytest\` (ci: tests.yml)
+
 ## Repo commands
 
 - \`tox -e py311\` (tox.ini)
@@ -1310,6 +1398,10 @@ Python project using flask.
 - Keep business logic separate from the framework layer when the project already follows that pattern.
 - Use virtual environments; never install packages globally.
 
+## Canonical commands
+
+- test: \`uv run pytest\` (ci: tests.yml)
+
 ## Repo commands
 
 - \`tox -e py311\` (tox.ini)
@@ -1340,6 +1432,10 @@ Python project using flask.
 ### Architecture
 - Keep business logic separate from the framework layer when the project already follows that pattern.
 - Use virtual environments; never install packages globally.
+
+## Canonical commands
+
+- test: \`uv run pytest\` (ci: tests.yml)
 
 ## Repo commands
 
@@ -1389,6 +1485,10 @@ Proyecto Python con flask.
 - Mantén la lógica de negocio separada de la capa de framework cuando el proyecto ya siga ese patrón.
 - Usa entornos virtuales; no instales paquetes globalmente.
 
+## Comandos canónicos
+
+- test: \`uv run pytest\` (ci: tests.yml)
+
 ## Comandos del repo
 
 - \`tox -e py311\` (tox.ini)
@@ -1432,6 +1532,10 @@ Proyecto Python con flask.
 - Mantén la lógica de negocio separada de la capa de framework cuando el proyecto ya siga ese patrón.
 - Usa entornos virtuales; no instales paquetes globalmente.
 
+## Comandos canónicos
+
+- test: \`uv run pytest\` (ci: tests.yml)
+
 ## Comandos del repo
 
 - \`tox -e py311\` (tox.ini)
@@ -1462,6 +1566,10 @@ Proyecto Python con flask.
 ### Arquitectura
 - Mantén la lógica de negocio separada de la capa de framework cuando el proyecto ya siga ese patrón.
 - Usa entornos virtuales; no instales paquetes globalmente.
+
+## Comandos canónicos
+
+- test: \`uv run pytest\` (ci: tests.yml)
 
 ## Comandos del repo
 

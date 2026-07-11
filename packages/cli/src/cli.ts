@@ -26,7 +26,7 @@ import {
   type PromptFn,
 } from "./core/prompt-engine.js";
 import { detectAvailableAssistants, polishFilesWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
-import type { Pack } from "./core/types.js";
+import type { Pack, RepoFacts } from "./core/types.js";
 import { jsTsPack } from "./packs/js-ts.js";
 import { pythonPack } from "./packs/python.js";
 import { javaPack } from "./packs/java.js";
@@ -75,6 +75,8 @@ export interface RunCliOptions {
   /** Preloaded repository configuration; loaded from disk when omitted. */
   config?: AgentRulesConfig;
   onConfigWarnings?: (warnings: readonly string[]) => void;
+  /** Receives the facts extracted from the repo (including canonical commands). */
+  onFacts?: (facts: RepoFacts) => void;
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
@@ -95,6 +97,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const answers = options.nonInteractive ? {} : await askQuestions(questions, promptFn);
   const detections = applyAnswers(rawDetections, answers);
   const facts = buildRepoFacts(signals, lang);
+  options.onFacts?.(facts);
 
   const entries: RenderEntry[] = detections.map((detection) => {
     const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
@@ -265,6 +268,7 @@ export async function main(): Promise<void> {
       for (const warning of loadedConfig.warnings) console.warn(warning);
     }
     let generatedFiles: readonly GeneratedFile[] = [];
+    let repoFacts: RepoFacts | undefined;
     const results = await runCli(process.cwd(), {
       lang,
       config: loadedConfig.config,
@@ -273,6 +277,9 @@ export async function main(): Promise<void> {
       skipLlm: nonInteractive,
       onGeneratedFiles: (files) => {
         generatedFiles = files;
+      },
+      onFacts: (facts) => {
+        repoFacts = facts;
       },
     });
     const written = results.filter((r) => r.status === "written");
@@ -291,6 +298,7 @@ export async function main(): Promise<void> {
         JSON.stringify({
           mode: action.check ? "check" : action.dryRun ? "dry-run" : "write",
           configWarnings: loadedConfig.warnings,
+          facts: repoFacts,
           wouldCreate: written.length,
           outdated: outdated.map((file) => file.path),
           results: results.map((result) => ({

@@ -2,8 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { fileURLToPath } from "node:url";
 import { runCli, resolveCliAction, getVersion, main } from "../src/cli.js";
 import type { GeneratedFile } from "../src/core/writer.js";
+import type { RepoFacts } from "../src/core/types.js";
+
+const FIXTURES_ROOT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "fixtures");
+const expressFixturePath = path.join(FIXTURES_ROOT, "node-express-mocha");
 
 let tmpDir: string;
 
@@ -352,5 +357,14 @@ describe("runCli", () => {
     expect(
       results.find((r) => r.path === ".claude/commands/python-review.generated.md")?.status
     ).toBe("written");
+  });
+
+  it("exposes repo facts through onFacts", async () => {
+    let facts: RepoFacts | undefined;
+    await runCli(expressFixturePath, {
+      dryRun: true, nonInteractive: true, skipLlm: true, lang: "en",
+      onFacts: (f) => { facts = f; },
+    });
+    expect(facts?.canonical.some((c) => c.kind === "test" && c.command === "npm test")).toBe(true);
   });
 });

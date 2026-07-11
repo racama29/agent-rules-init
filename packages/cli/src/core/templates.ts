@@ -31,6 +31,11 @@ function renderSection(entries: RenderEntry[], lang: Lang): string {
 export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
   const ui = UI[lang];
   const sections: string[] = [];
+  const canonical = facts.canonical.filter((c) => c.confidence === "high");
+  if (canonical.length > 0) {
+    const lines = canonical.map((c) => `- ${c.kind}: \`${c.command}\` (${c.source})`);
+    sections.push([`## ${ui.sections.canonical}`, "", ...lines].join("\n"));
+  }
   if (facts.commands.length > 0) {
     const lines = facts.commands.map((c) => {
       const sourceFile = c.manifestPath ?? SOURCE_FILES[c.source];

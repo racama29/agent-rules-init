@@ -319,4 +319,18 @@ describe("buildRepoFacts", () => {
     const facts = buildRepoFacts(baseSignals({}), "es");
     expect(facts).toEqual({ commands: [], omittedCommands: [], structure: [], ciCommands: [], omittedCiCount: 0, canonical: [] });
   });
+
+  it("fills canonical commands from the extracted scripts", () => {
+    const signals = baseSignals({
+      packageJson: {
+        dependencies: {}, devDependencies: {}, moduleType: "commonjs",
+        scripts: { test: "mocha", lint: "eslint ." },
+      },
+    });
+    const facts = buildRepoFacts(signals, "en");
+    expect(facts.canonical).toEqual([
+      { kind: "test", command: "npm test", source: "package.json", confidence: "high", scope: "." },
+      { kind: "lint", command: "npm run lint", source: "package.json", confidence: "high", scope: "." },
+    ]);
+  });
 });
