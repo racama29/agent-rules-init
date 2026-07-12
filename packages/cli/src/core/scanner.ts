@@ -16,12 +16,30 @@ const IGNORED_DIRS = new Set([
   ".gradle", ".dart_tool",
   ".agent-rules-init",
 ]);
-const MAX_DEPTH = 4;
+const DEFAULT_MAX_DEPTH = 12;
+const DEFAULT_MAX_FILES = 100_000;
 
-function walk(rootPath: string): string[] {
+export interface ScanOptions {
+  maxDepth?: number;
+  maxFiles?: number;
+}
+
+interface WalkResult {
+  files: string[];
+  warnings: string[];
+}
+
+function walk(rootPath: string, options: ScanOptions): WalkResult {
   const results: string[] = [];
+  const warnings = new Set<string>();
+  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   function recurse(dir: string, depth: number) {
-    if (depth > MAX_DEPTH) return;
+    if (results.length >= maxFiles) return;
+    if (depth > maxDepth) {
+      warnings.add(`Repository scan reached maxDepth=${maxDepth}; some nested files were skipped.`);
+      return;
+    }
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -38,11 +56,15 @@ function walk(rootPath: string): string[] {
       } else {
         if (entry.name.includes(".generated.")) continue;
         results.push(path.relative(rootPath, path.join(dir, entry.name)));
+        if (results.length >= maxFiles) {
+          warnings.add(`Repository scan reached maxFiles=${maxFiles}; remaining files were skipped.`);
+          return;
+        }
       }
     }
   }
   recurse(rootPath, 0);
-  return results;
+  return { files: results, warnings: [...warnings] };
 }
 
 // Windows editors (Notepad, PowerShell's Set-Content, some IDE defaults) save UTF-8
@@ -66,14 +88,21 @@ function toPackageJsonManifest(
 ): LocatedPackageJsonManifest {
   return {
     path: relativePath.split(path.sep).join("/"),
-    name: raw.name as string | undefined,
+    name: typeof raw.name === "string" ? raw.name : undefined,
     main: typeof raw.main === "string" ? raw.main : undefined,
-    dependencies: (raw.dependencies as Record<string, string>) ?? {},
-    devDependencies: (raw.devDependencies as Record<string, string>) ?? {},
-    scripts: (raw.scripts as Record<string, string>) ?? {},
+    dependencies: stringRecord(raw.dependencies),
+    devDependencies: stringRecord(raw.devDependencies),
+    scripts: stringRecord(raw.scripts),
     moduleType: raw.type === "module" ? "module" : "commonjs",
     packageManager: parsePackageManager(raw.packageManager),
   };
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
 }
 
 function parsePackageManager(value: unknown): JsPackageManager | undefined {
@@ -188,8 +217,10 @@ function pickShallowest(paths: (string | undefined)[]): string | undefined {
   return shallowest(paths.filter((p): p is string => p !== undefined));
 }
 
-export function scanRepo(rootPath: string): RepoSignals {
-  const files = walk(rootPath);
+export function scanRepo(rootPath: string, options: ScanOptions = {}): RepoSignals {
+  const startedAt = performance.now();
+  const walked = walk(rootPath, options);
+  const files = walked.files;
   const fileSet = new Set(files.map((f) => f.split(path.sep).join("/")));
 
   // Keep every project package manifest, not only the root workspace manifest. Root
@@ -314,6 +345,12 @@ export function scanRepo(rootPath: string): RepoSignals {
     return guidanceNames.has(path.posix.basename(normalized));
   });
 
+  const scanStats = {
+    files: files.length,
+    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    truncated: walked.warnings.length > 0,
+    mode: "sync" as const,
+  };
   return {
     rootPath,
     files,
@@ -355,5 +392,7 @@ export function scanRepo(rootPath: string): RepoSignals {
     guidanceFiles: guidancePaths
       .map((p) => ({ path: p.split(path.sep).join("/"), content: readTextIfExists(path.join(rootPath, p)) }))
       .filter((f): f is { path: string; content: string } => f.content !== undefined),
+    scanWarnings: walked.warnings,
+    scanStats,
   };
 }

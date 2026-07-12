@@ -66,7 +66,8 @@ export function applyProjectExcludes(signals: RepoSignals, patterns: readonly st
 }
 
 function withoutLocation(manifest: LocatedPackageJsonManifest): PackageJsonManifest {
-  const { path: _path, ...packageJson } = manifest;
+  const packageJson = { ...manifest };
+  delete (packageJson as Partial<LocatedPackageJsonManifest>).path;
   return packageJson;
 }
 

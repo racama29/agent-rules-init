@@ -8,6 +8,7 @@ export type AssistantId = "claude" | "codex";
 
 export interface ExecResult {
   stdout: string;
+  stderr?: string;
   exitCode: number;
 }
 
@@ -66,6 +67,7 @@ export function createDefaultExecFn(timeoutMs = DEFAULT_EXEC_TIMEOUT_MS): ExecFn
     // CLI process happens to live.
     const child = spawn(command, args, { shell: process.platform === "win32", cwd, timeout: timeoutMs });
     let stdout = "";
+    let stderr = "";
     let outputLimitExceeded = false;
     child.stdout?.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -74,12 +76,19 @@ export function createDefaultExecFn(timeoutMs = DEFAULT_EXEC_TIMEOUT_MS): ExecFn
         child.kill();
       }
     });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+      if (stderr.length > MAX_ASSISTANT_OUTPUT_CHARS) stderr = stderr.slice(-MAX_ASSISTANT_OUTPUT_CHARS);
+    });
     child.on("error", reject);
     child.on("close", (exitCode) => {
       if (outputLimitExceeded) reject(new Error(`${command} exceeded the assistant output limit`));
-      else if (exitCode === 0) resolve({ stdout, exitCode });
+      else if (exitCode === 0) resolve({ stdout, stderr, exitCode });
       else if (child.killed) reject(new Error(`${command} timed out after ${timeoutMs / 1000}s`));
-      else reject(new Error(`${command} exited with code ${exitCode}`));
+      else {
+        const detail = stderr.trim().slice(-2_000).replace(/[\r\n]+/g, " ");
+        reject(new Error(`${command} exited with code ${exitCode}${detail ? `: ${detail}` : ""}`));
+      }
     });
     // Content always goes through stdin, never as a CLI argument: on Windows, spawn's
     // shell:true routes the command through cmd.exe, which cannot reliably carry a
@@ -325,6 +334,12 @@ function assistantFailureDetail(assistant: AssistantId, error: unknown): string 
   const message = (error as Error).message;
   if (/unknown (?:option|argument)|unrecognized (?:option|argument)|unexpected argument/i.test(message)) {
     return `${assistant} does not support the required read-only safety flags; update the assistant CLI`;
+  }
+  if (/not (?:logged|signed) in|unauthenticated|authentication|login required|401\b/i.test(message)) {
+    return `${assistant} is installed but not authenticated; sign in with the assistant CLI and retry`;
+  }
+  if (/enotfound|econnrefused|network|timed? out|connection/i.test(message)) {
+    return `${assistant} could not reach its service; check connectivity or lower the enrichment timeout`;
   }
   return message;
 }

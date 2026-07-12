@@ -138,6 +138,17 @@ projects:
     expect(loadConfig(tmpDir)).toEqual({ config: {}, sourcePath: configPath, warnings: [] });
   });
 
+  it("accepts scanner budgets and rejects unsafe values", () => {
+    writeConfig("scanMaxDepth: 20\nscanMaxFiles: 250000\nscanWorkerTimeoutSeconds: 45\n");
+    expect(loadConfig(tmpDir).config).toMatchObject({ scanMaxDepth: 20, scanMaxFiles: 250000, scanWorkerTimeoutSeconds: 45 });
+
+    writeConfig("scanMaxDepth: 0\nscanMaxFiles: 10\nscanWorkerTimeoutSeconds: 0\n", ".agent-rules-init.yaml");
+    fs.rmSync(path.join(tmpDir, ".agent-rules-init.yml"));
+    const invalid = loadConfig(tmpDir);
+    expect(invalid.config).toEqual({});
+    expect(invalid.warnings).toHaveLength(3);
+  });
+
   it("throws ConfigError with the source path for invalid YAML", () => {
     const configPath = writeConfig("projects: [unterminated\n");
     expect(() => loadConfig(tmpDir)).toThrow(ConfigError);

@@ -11,6 +11,19 @@ What sets it apart from asking an assistant to "write me a CLAUDE.md":
 - **AI as an amplifier, with guardrails** — with `claude` or `codex` installed, `--enrich` has your own assistant investigate the code and rewrite the generic sections with verified, repo-specific rules; its output is validated and canonical commands must survive verbatim, or the deterministic version is kept.
 - **Never destructive** — everything is written with a `.generated.` suffix; your hand-tuned files are read and integrated, never overwritten.
 
+## Three-step workflow
+
+```text
+npx agent-rules-init  →  review *.generated.*  →  npx agent-rules-init --apply
+       generate                  inspect                     activate + backup
+```
+
+The first command is safe to run in an existing repository: it only creates staging
+files. Review the detected commands and evidence, then use `--apply` to activate them.
+Run `--force` after tooling or architecture changes to refresh staging, and use
+`--check` in CI to detect stale rules. See [Getting started](docs/getting-started.md)
+for the shortest complete walkthrough.
+
 ## Usage
 
 From the root of your repo:
@@ -38,6 +51,7 @@ Besides per-stack advice, the generated files include **facts extracted from you
 
 - **Repo commands** — the real build/test/lint commands declared in `package.json` scripts, `composer.json` scripts, `Makefile` targets, `mix.exs` aliases and `tox.ini` envs.
 - **Workspace-aware detection** — nested JS/TS packages get path-scoped rules and executable commands for npm, pnpm, Yarn or Bun.
+- **Measured detection quality** — CI enforces a rendered corpus contract plus 30 positive/negative scenarios spanning all 15 stacks.
 - **Structure** — top-level directories, annotated only when their meaning is unambiguous.
 - **What CI runs** — the `run:` steps from your `.github/workflows/*.yml` (read locally; the CLI never touches the network).
 - **Observed architecture** — declared entrypoints, test placement, source roots, workspaces and layered layouts, each with file evidence.
@@ -95,6 +109,9 @@ model: gpt-5.5
 enrichCache: true
 enrichTimeoutSeconds: 300
 enrichRetries: 1
+scanMaxDepth: 12
+scanMaxFiles: 100000
+scanWorkerTimeoutSeconds: 30
 exclude:
   - legacy/**
 projects:
@@ -154,8 +171,7 @@ All generated content and CLI messages are available in **English and Spanish**.
 
 ```bash
 npm install
-npm run build --workspaces --if-present
-npm run test --workspaces --if-present
+npm run check
 ```
 
 ## Contributing

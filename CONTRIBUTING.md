@@ -3,10 +3,12 @@
 ## Desarrollo local
 
 ```bash
-npm install
-npm run build --workspaces --if-present
-npm run test --workspaces --if-present
+npm ci
+npm run check
 ```
+
+Los umbrales y el significado de las métricas están documentados en
+[`docs/test-coverage.md`](docs/test-coverage.md).
 
 ## Añadir un stack nuevo
 
@@ -16,7 +18,7 @@ Ver [`docs/writing-a-pack.md`](docs/writing-a-pack.md) — un pack nuevo es un a
 
 - Un PR por cambio lógico.
 - Cada pack nuevo o modificado debe incluir tests unitarios (`detect`, `rules`, `promptTemplates`) con al menos un caso de confianza alta y uno de confianza baja.
-- `npm run test --workspaces --if-present` debe pasar antes de abrir el PR.
+- `npm run check` debe pasar antes de abrir el PR; incluye tipos, lint, tests, build y smoke test del paquete.
 
 ## Releases
 

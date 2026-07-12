@@ -31,3 +31,25 @@ npx vitest run test/corpus.test.ts -u
 ```
 
 Snapshot updates should preserve source attribution, omit low-confidence claims and keep the three consumer documents materially different.
+
+## Measurable corpus contract
+
+`packages/cli/test/corpus-quality-cases.ts` is the versioned quality contract. Each
+fixture declares required and forbidden terms plus the minimum number of evidence-backed
+claims. The corpus test also verifies that Claude, AGENTS and Copilot outputs remain
+materially different. A release must score 100%; new stacks should add a representative
+fixture and quality case instead of relying only on snapshots.
+
+`quality-matrix.test.ts` adds 30 focused detection scenarios: one positive framework
+case and one neutral false-positive guard for every supported stack. CI runs both the
+rendered corpus and this matrix through `npm run test:quality`.
+
+## Large repositories
+
+The scanner is bounded by `scanMaxDepth` and `scanMaxFiles`. Machine-readable output
+includes `scanStats` (`files`, `durationMs`, `truncated`) and `scanWarnings`, making slow
+or incomplete discovery visible in CI. Raise a budget deliberately for unusually deep
+monorepos; a truncated scan must not be treated as a complete repository inventory.
+The published CLI runs discovery in a worker thread. `scanStats.mode` reports `worker`,
+`sync`, or `sync-fallback`; `scanWorkerTimeoutSeconds` bounds the worker. If workers are
+unavailable, the deterministic synchronous scanner is retained and emits a warning.

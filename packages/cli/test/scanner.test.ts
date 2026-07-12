@@ -7,6 +7,36 @@ import { scanRepo } from "../src/core/scanner.js";
 const fixturesRoot = path.resolve(__dirname, "../../../fixtures");
 
 describe("scanRepo", () => {
+  it("finds manifests nested deeper than the old fixed four-level limit", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-depth-"));
+    try {
+      const nested = path.join(tmpDir, "a", "b", "c", "d", "e", "f");
+      fs.mkdirSync(nested, { recursive: true });
+      fs.writeFileSync(path.join(nested, "package.json"), JSON.stringify({ dependencies: { react: "18" } }));
+      expect(scanRepo(tmpDir).packageJson?.dependencies.react).toBe("18");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports truncation and ignores malformed package manifest fields", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-limit-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({
+        name: 42,
+        dependencies: { valid: "1", invalid: false },
+        scripts: ["test"],
+      }));
+      const signals = scanRepo(tmpDir, { maxDepth: 1, maxFiles: 1 });
+      expect(signals.packageJson?.name).toBeUndefined();
+      expect(signals.packageJson?.dependencies).toEqual({ valid: "1" });
+      expect(signals.packageJson?.scripts).toEqual({});
+      expect(signals.scanWarnings).toContain("Repository scan reached maxFiles=1; remaining files were skipped.");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("reads package.json dependencies for a JS/TS repo", () => {
     const signals = scanRepo(path.join(fixturesRoot, "node-react-vitest"));
     expect(signals.packageJson?.dependencies.react).toBe("^18.3.0");
@@ -32,7 +62,7 @@ describe("scanRepo", () => {
 
   it("aggregates dependencies from nested npm workspace manifests", () => {
     const signals = scanRepo(path.resolve(fixturesRoot, ".."));
-    expect(signals.packageJson?.devDependencies.vitest).toBe("^2.1.0");
+    expect(signals.packageJson?.devDependencies.vitest).toBe("^3.2.7");
     expect(signals.packageJsons?.map((p) => p.path)).toContain("packages/cli/package.json");
   });
 

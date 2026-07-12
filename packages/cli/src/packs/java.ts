@@ -36,7 +36,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
     (signals.pomXml && /\bkotlin\b/i.test(signals.pomXml))
   ) return null;
 
-  const framework: DetectionField<string> = /spring/i.test(source)
+  const framework: DetectionField<string> = /(?:org\.springframework|spring-boot|springframework)/i.test(source)
     ? { value: "spring", confidence: "high" }
     : { value: "none", confidence: "low" };
 

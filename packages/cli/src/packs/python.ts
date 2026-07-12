@@ -29,9 +29,12 @@ const TEST_RUNNERS: [string, string][] = [
 ];
 
 function findIn(haystack: string, table: [string, string][]): DetectionField<string> | undefined {
-  const lower = haystack.toLowerCase();
   for (const [needle, label] of table) {
-    if (lower.includes(needle)) return { value: label, confidence: "high" };
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match dependency identifiers, not substrings in project names such as
+    // `fastapi-utils` or prose mentioning "unittest-like" behavior.
+    const dependency = new RegExp(`(?:^|["'\\s])${escaped}(?=$|["'\\s,;<>=!~\\[])`, "im");
+    if (dependency.test(haystack)) return { value: label, confidence: "high" };
   }
   return undefined;
 }

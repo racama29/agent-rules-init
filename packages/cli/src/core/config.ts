@@ -8,6 +8,7 @@ const ROOT_KEYS = new Set([
   "lang", "exclude", "projects", "noAi", "enrich", "assistant", "model",
   "enrichCache", "enrichTimeoutSeconds",
   "enrichRetries",
+  "scanMaxDepth", "scanMaxFiles", "scanWorkerTimeoutSeconds",
 ]);
 const PROJECT_KEYS = ["framework", "testRunner", "linter", "packageManager"] as const;
 const PROJECT_KEY_SET: ReadonlySet<string> = new Set(PROJECT_KEYS);
@@ -33,6 +34,12 @@ export interface AgentRulesConfig {
   enrichTimeoutSeconds?: number;
   /** Validation retries after the first attempt (0..2). */
   enrichRetries?: number;
+  /** Maximum directory nesting inspected by the repository scanner (1..64). */
+  scanMaxDepth?: number;
+  /** Maximum files collected before stopping the repository scan (100..1,000,000). */
+  scanMaxFiles?: number;
+  /** Worker scan timeout before a synchronous compatibility fallback (1..300 seconds). */
+  scanWorkerTimeoutSeconds?: number;
 }
 
 export interface LoadedConfig {
@@ -63,7 +70,7 @@ function unknownKeyWarnings(
 ): string[] {
   return Object.keys(value)
     .filter((key) => !allowed.has(key))
-    .map((key) => `Unknown configuration key \"${location}${key}\"; it was ignored.`);
+    .map((key) => `Unknown configuration key "${location}${key}"; it was ignored.`);
 }
 
 function optionalNonEmptyString(
@@ -73,7 +80,7 @@ function optionalNonEmptyString(
 ): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string" || value.trim().length === 0) {
-    warnings.push(`Configuration key \"${location}\" must be a non-empty string; it was ignored.`);
+    warnings.push(`Configuration key "${location}" must be a non-empty string; it was ignored.`);
     return undefined;
   }
   return value.trim();
@@ -93,7 +100,7 @@ function validateProjects(value: unknown, warnings: string[]): Record<string, Pr
       continue;
     }
     if (!isRecord(rawProject)) {
-      warnings.push(`Configuration key \"projects.${projectPath}\" must be an object; it was ignored.`);
+      warnings.push(`Configuration key "projects.${projectPath}" must be an object; it was ignored.`);
       continue;
     }
 
@@ -179,6 +186,27 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
     } else {
       warnings.push('Configuration key "enrichRetries" must be an integer from 0 to 2; it was ignored.');
     }
+  }
+
+  if (value.scanMaxDepth !== undefined) {
+    const depth = value.scanMaxDepth;
+    if (typeof depth === "number" && Number.isInteger(depth) && depth >= 1 && depth <= 64) {
+      config.scanMaxDepth = depth;
+    } else warnings.push('Configuration key "scanMaxDepth" must be an integer from 1 to 64; it was ignored.');
+  }
+
+  if (value.scanMaxFiles !== undefined) {
+    const files = value.scanMaxFiles;
+    if (typeof files === "number" && Number.isInteger(files) && files >= 100 && files <= 1_000_000) {
+      config.scanMaxFiles = files;
+    } else warnings.push('Configuration key "scanMaxFiles" must be an integer from 100 to 1000000; it was ignored.');
+  }
+
+  if (value.scanWorkerTimeoutSeconds !== undefined) {
+    const timeout = value.scanWorkerTimeoutSeconds;
+    if (typeof timeout === "number" && Number.isInteger(timeout) && timeout >= 1 && timeout <= 300) {
+      config.scanWorkerTimeoutSeconds = timeout;
+    } else warnings.push('Configuration key "scanWorkerTimeoutSeconds" must be an integer from 1 to 300; it was ignored.');
   }
 
   return config;

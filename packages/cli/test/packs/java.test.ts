@@ -30,6 +30,11 @@ describe("javaPack", () => {
     expect(detection?.framework?.confidence).toBe("low");
   });
 
+  it("does not infer Spring from an unrelated project name", () => {
+    const signals = baseSignals({ pomXml: "<project><artifactId>spring-cleanup-tool</artifactId></project>" });
+    expect(javaPack.detect(signals)?.framework).toEqual({ value: "none", confidence: "low" });
+  });
+
   it("returns null when build.gradle.kts applies the Kotlin plugin (defers to the Kotlin pack)", () => {
     const detection = javaPack.detect(
       baseSignals({ buildGradle: 'plugins {\n    kotlin("jvm") version "1.9.0"\n}' })

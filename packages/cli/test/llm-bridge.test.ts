@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { detectAvailableAssistants, enrichFilesWithAssistant } from "../src/core/llm-bridge.js";
+import { createDefaultExecFn, detectAvailableAssistants, enrichFilesWithAssistant } from "../src/core/llm-bridge.js";
 
 describe("detectAvailableAssistants", () => {
   it("returns both assistants when both exec calls succeed", async () => {
@@ -24,6 +24,14 @@ describe("detectAvailableAssistants", () => {
     const execFn = vi.fn().mockRejectedValue(new Error("command not found"));
     const result = await detectAvailableAssistants(execFn);
     expect(result).toEqual([]);
+  });
+});
+
+describe("assistant process diagnostics", () => {
+  it("preserves bounded stderr details from a failing assistant process", async () => {
+    const exec = createDefaultExecFn(5_000);
+    await expect(exec(process.execPath, ["-e", "process.stderr.write('authentication required'); process.exit(2)"]))
+      .rejects.toThrow("authentication required");
   });
 });
 

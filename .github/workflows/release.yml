@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
@@ -20,9 +24,8 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
+      - run: npm run check
+      - run: npm audit --omit=dev --audit-level=high
       - name: Verify tag matches package version
         run: node -e "if ('v' + require('./packages/cli/package.json').version !== process.env.GITHUB_REF_NAME) process.exit(1)"
       - name: Publish package

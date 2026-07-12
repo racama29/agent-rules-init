@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { runCli } from "../src/cli.js";
 import type { GeneratedFile } from "../src/core/writer.js";
 import type { Lang } from "../src/core/i18n.js";
+import { CORPUS_QUALITY_CASES } from "./corpus-quality-cases.js";
 
 const FIXTURES_ROOT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..", "..", "..", "fixtures");
 
@@ -49,6 +50,39 @@ describe("corpus snapshots", () => {
 });
 
 describe("content quality gates", () => {
+  it("meets the versioned corpus quality score", async () => {
+    let earned = 0;
+    let available = 0;
+    const failures: string[] = [];
+    for (const qualityCase of CORPUS_QUALITY_CASES) {
+      const files = await renderCorpus(qualityCase.fixture, "en");
+      const output = [...files.values()].join("\n");
+      for (const term of qualityCase.requiredTerms) {
+        available++;
+        if (output.includes(term)) earned++;
+        else failures.push(`${qualityCase.fixture}: missing ${term}`);
+      }
+      for (const term of qualityCase.forbiddenTerms ?? []) {
+        available++;
+        if (!output.includes(term)) earned++;
+        else failures.push(`${qualityCase.fixture}: forbidden ${term}`);
+      }
+      available++;
+      const evidenceClaims = output.match(/\(evidence:/g)?.length ?? 0;
+      if (evidenceClaims >= qualityCase.minimumEvidenceClaims) earned++;
+      else failures.push(`${qualityCase.fixture}: only ${evidenceClaims} evidence claims`);
+      available++;
+      const consumerDocs = [
+        files.get("CLAUDE.generated.md"),
+        files.get("AGENTS.generated.md"),
+        files.get(".github/copilot-instructions.generated.md"),
+      ];
+      if (consumerDocs.every(Boolean) && new Set(consumerDocs).size === 3) earned++;
+      else failures.push(`${qualityCase.fixture}: consumer documents are not distinct`);
+    }
+    expect({ failures, earned, available, score: earned / available }).toMatchObject({ failures: [], score: 1 });
+  });
+
   it("Express, Flask and Petclinic fixtures produce clearly distinct rules", async () => {
     const express = await renderCorpus("node-express-mocha", "en");
     const flask = await renderCorpus("python-uv-tox", "en");

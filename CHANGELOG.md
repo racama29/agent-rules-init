@@ -13,11 +13,22 @@ All notable changes to this project are documented here. The format follows
 - Verified enrichment cache keyed by repository content, deterministic baseline, assistant/model and accepted output hashes.
 - Configurable per-attempt timeout and retry budget through CLI flags and repository configuration.
 - Enrichment change metrics for cache hits, changed files/lines and semantic-security rejections.
+- Worker-thread repository scanning with bounded depth/files, timeout, fallback diagnostics and JSON performance metrics.
+- Versioned content-quality corpus plus 30 positive/negative detection scenarios covering all 15 supported stacks.
+- Published-package smoke testing, coverage thresholds, ESLint, dependency auditing and automated dependency updates.
+- Safe three-step onboarding documentation for generating, reviewing and activating rules.
+
+### Changed
+
+- Split pack registration, existing-document loading and CLI option parsing into focused modules.
+- Tightened Python and Java framework detection to avoid similarly named dependency and project false positives.
+- Raised CI coverage requirements to 90% lines, 85% branches and 82% functions.
 
 ### Security
 
 - Reject prompt-injection language, unverified commands and new Markdown sections in assistant output.
 - Treat existing instruction documents as delimited untrusted data and reject evidence paths outside the repository or through symlinks.
+- Preserve bounded assistant stderr and turn unsupported flags, authentication failures and network failures into actionable diagnostics.
 
 ## [0.6.2] - 2026-07-12
 

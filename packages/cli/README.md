@@ -1,5 +1,14 @@
 # agent-rules-init
 
+This is the publishable CLI package from the
+[`agent-rules-init` repository](https://github.com/racama29/agent-rules-init).
+The root README is the canonical source for the complete feature, configuration,
+security and contribution documentation.
+
+The operating model is intentionally simple: generate staging files, review them,
+then activate them with `npx agent-rules-init --apply`. Existing active files are
+backed up before replacement.
+
 Generate repository-specific instructions for Claude Code, Codex, GitHub Copilot, Cursor, Gemini CLI and Windsurf from the manifests and commands that already exist in your project.
 
 ```bash

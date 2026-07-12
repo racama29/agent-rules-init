@@ -69,6 +69,13 @@ describe("pythonPack", () => {
     expect(detection?.framework?.confidence).toBe("low");
   });
 
+  it("does not infer frameworks or runners from similarly named packages", () => {
+    const signals = baseSignals({ pyprojectToml: '[project]\ndependencies = ["fastapi-utils", "pytest-helper"]' });
+    const detection = pythonPack.detect(signals);
+    expect(detection?.framework?.value).toBe("none");
+    expect(detection?.testRunner?.value).toBe("unknown");
+  });
+
   it('does not leak the "unknown" sentinel into rules or templates when no test runner is detected', () => {
     const detection = pythonPack.detect(baseSignals({ requirementsTxt: "some-random-lib==1.0" }))!;
     expect(detection.testRunner?.value).toBe("unknown");

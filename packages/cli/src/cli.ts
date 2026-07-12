@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as clack from "@clack/prompts";
 import { scanRepo } from "./core/scanner.js";
+import { scanRepoInWorker } from "./core/scanner-async.js";
 import { writeGeneratedFiles, type GeneratedFile, type WriteResult } from "./core/writer.js";
 import {
   renderClaudeMd,
@@ -33,7 +34,7 @@ import {
   type EnrichMetrics,
   type ExecFn,
 } from "./core/llm-bridge.js";
-import type { Pack, RepoFacts } from "./core/types.js";
+import type { RepoFacts, RepoSignals } from "./core/types.js";
 import {
   hashGeneratedFiles,
   makeGenerationState,
@@ -43,39 +44,11 @@ import {
 import { loadCachedEnrichment, makeEnrichmentState } from "./core/enrichment-cache.js";
 import { evaluateGenerationCheck } from "./core/check-state.js";
 import { applyGeneratedFiles, type ActivationResult } from "./core/activation.js";
-import { jsTsPack } from "./packs/js-ts.js";
-import { pythonPack } from "./packs/python.js";
-import { javaPack } from "./packs/java.js";
-import { phpPack } from "./packs/php.js";
-import { rubyPack } from "./packs/ruby.js";
-import { goPack } from "./packs/go.js";
-import { rustPack } from "./packs/rust.js";
-import { csharpPack } from "./packs/csharp.js";
-import { kotlinPack } from "./packs/kotlin.js";
-import { swiftPack } from "./packs/swift.js";
-import { dartPack } from "./packs/dart.js";
-import { cppPack } from "./packs/cpp.js";
-import { elixirPack } from "./packs/elixir.js";
-import { scalaPack } from "./packs/scala.js";
-import { rPack } from "./packs/r.js";
-
-const ALL_PACKS: Pack[] = [
-  jsTsPack,
-  pythonPack,
-  javaPack,
-  phpPack,
-  rubyPack,
-  goPack,
-  rustPack,
-  csharpPack,
-  kotlinPack,
-  swiftPack,
-  dartPack,
-  cppPack,
-  elixirPack,
-  scalaPack,
-  rPack,
-];
+import { ALL_PACKS, findPack } from "./packs/index.js";
+import { readExistingDocs } from "./core/existing-docs.js";
+import { resolveCliAction } from "./core/cli-options.js";
+export { resolveCliAction } from "./core/cli-options.js";
+export type { CliAction, CliRunOptions } from "./core/cli-options.js";
 
 export interface RunCliOptions {
   /** @deprecated Project metadata is no longer requested interactively. */
@@ -111,31 +84,10 @@ export interface RunCliOptions {
   onConfigWarnings?: (warnings: readonly string[]) => void;
   /** Receives the facts extracted from the repo (including canonical commands). */
   onFacts?: (facts: RepoFacts) => void;
-}
-
-// Final-name docs the tool itself would generate; when they already exist they carry the
-// team's hand-written intent, so enrichment must integrate them instead of ignoring them.
-const EXISTING_DOC_PATHS = [
-  "CLAUDE.md",
-  "AGENTS.md",
-  "GEMINI.md",
-  ".github/copilot-instructions.md",
-  ".cursor/rules/repository.mdc",
-];
-const MAX_EXISTING_DOC_CHARS = 20_000;
-
-function readExistingDocs(rootPath: string): GeneratedFile[] {
-  const docs: GeneratedFile[] = [];
-  for (const relativePath of EXISTING_DOC_PATHS) {
-    const absolutePath = path.join(rootPath, relativePath);
-    if (!fs.existsSync(absolutePath)) continue;
-    const stat = fs.lstatSync(absolutePath);
-    if (!stat.isFile() || stat.isSymbolicLink()) continue;
-    const content = fs.readFileSync(absolutePath, "utf8");
-    if (content.trim() === "") continue;
-    docs.push({ path: relativePath, content: content.slice(0, MAX_EXISTING_DOC_CHARS) });
-  }
-  return docs;
+  onScanWarnings?: (warnings: readonly string[]) => void;
+  onScanStats?: (stats: NonNullable<RepoSignals["scanStats"]>) => void;
+  /** Offload repository traversal to a worker thread. Enabled by the published binary. */
+  useScannerWorker?: boolean;
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
@@ -147,7 +99,26 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const lang = options.lang ?? config.lang ?? detectLang();
   const ui = UI[lang];
 
-  const signals = applyProjectExcludes(scanRepo(rootPath), config.exclude ?? []);
+  const scanOptions = {
+    maxDepth: config.scanMaxDepth,
+    maxFiles: config.scanMaxFiles,
+  };
+  let scanned: RepoSignals;
+  if (options.useScannerWorker) {
+    try {
+      scanned = await scanRepoInWorker(rootPath, scanOptions, (config.scanWorkerTimeoutSeconds ?? 30) * 1_000);
+    } catch (error) {
+      scanned = scanRepo(rootPath, scanOptions);
+      scanned.scanWarnings = [
+        ...(scanned.scanWarnings ?? []),
+        `Scanner worker unavailable; used synchronous fallback: ${(error as Error).message}`,
+      ];
+      if (scanned.scanStats) scanned.scanStats.mode = "sync-fallback";
+    }
+  } else scanned = scanRepo(rootPath, scanOptions);
+  const signals = applyProjectExcludes(scanned, config.exclude ?? []);
+  options.onScanWarnings?.(signals.scanWarnings ?? []);
+  if (signals.scanStats) options.onScanStats?.(signals.scanStats);
   const rawDetections = ALL_PACKS.map((pack) => pack.detect(signals)).filter(
     (d): d is NonNullable<typeof d> => d !== null
   );
@@ -162,7 +133,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const ctx = { facts, signals };
 
   const entries: RenderEntry[] = detections.map((detection) => {
-    const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
+    const pack = findPack(detection.packId);
     return { detection, ruleSet: pack.rules(detection, lang, ctx) };
   });
 
@@ -181,7 +152,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     });
     files.push({ path: "GEMINI.generated.md", content: renderGeminiMd(entries, facts, lang) });
     for (const detection of detections) {
-      const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
+      const pack = findPack(detection.packId);
       for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx))) {
         files.push(file);
       }
@@ -325,124 +296,6 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   return results;
 }
 
-export interface CliRunOptions {
-  lang?: Lang;
-  dryRun?: true;
-  force?: true;
-  apply?: true;
-  check?: true;
-  json?: true;
-  nonInteractive?: true;
-  enrich?: true;
-  assistant?: AssistantId;
-  model?: string;
-  enrichTimeoutSeconds?: number;
-  noEnrichCache?: true;
-  enrichRetries?: number;
-}
-
-export type CliAction =
-  | ({ kind: "run" } & CliRunOptions)
-  | { kind: "help" }
-  | { kind: "version" }
-  | { kind: "invalid-lang"; value: string }
-  | { kind: "invalid-assistant"; value: string }
-  | { kind: "invalid-timeout"; value: string }
-  | { kind: "invalid-retries"; value: string }
-  | { kind: "missing-value"; flag: string }
-  | { kind: "unknown"; flag: string };
-
-function isLang(value: string | undefined): value is Lang {
-  return value === "es" || value === "en";
-}
-
-function isAssistant(value: string | undefined): value is AssistantId {
-  return value === "claude" || value === "codex";
-}
-
-export function resolveCliAction(argv: string[]): CliAction {
-  const options: CliRunOptions = {};
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "--help" || arg === "-h") return { kind: "help" };
-    if (arg === "--version" || arg === "-v") return { kind: "version" };
-    if (arg === "--lang" || arg.startsWith("--lang=")) {
-      const value = arg.startsWith("--lang=") ? arg.slice("--lang=".length) : argv[++i] ?? "";
-      if (!isLang(value)) return { kind: "invalid-lang", value };
-      options.lang = value;
-      continue;
-    }
-    if (arg === "--dry-run") {
-      options.dryRun = true;
-      continue;
-    }
-    if (arg === "--force") {
-      options.force = true;
-      continue;
-    }
-    if (arg === "--apply") {
-      options.apply = true;
-      continue;
-    }
-    if (arg === "--check") {
-      options.check = true;
-      continue;
-    }
-    if (arg === "--json") {
-      options.json = true;
-      continue;
-    }
-    if (arg === "--non-interactive") {
-      options.nonInteractive = true;
-      continue;
-    }
-    if (arg === "--enrich") {
-      options.enrich = true;
-      continue;
-    }
-    if (arg === "--assistant" || arg.startsWith("--assistant=")) {
-      const value = arg.startsWith("--assistant=") ? arg.slice("--assistant=".length) : argv[++i] ?? "";
-      if (!isAssistant(value)) return { kind: "invalid-assistant", value };
-      options.assistant = value;
-      continue;
-    }
-    if (arg === "--model" || arg.startsWith("--model=")) {
-      const value = arg.startsWith("--model=") ? arg.slice("--model=".length) : argv[++i] ?? "";
-      if (value === "") return { kind: "missing-value", flag: "--model" };
-      options.model = value;
-      continue;
-    }
-    if (arg === "--enrich-timeout" || arg.startsWith("--enrich-timeout=")) {
-      const value = arg.startsWith("--enrich-timeout=")
-        ? arg.slice("--enrich-timeout=".length)
-        : argv[++i] ?? "";
-      const timeout = Number(value);
-      if (!Number.isInteger(timeout) || timeout < 10 || timeout > 3600) {
-        return { kind: "invalid-timeout", value };
-      }
-      options.enrichTimeoutSeconds = timeout;
-      continue;
-    }
-    if (arg === "--no-enrich-cache") {
-      options.noEnrichCache = true;
-      continue;
-    }
-    if (arg === "--enrich-retries" || arg.startsWith("--enrich-retries=")) {
-      const value = arg.startsWith("--enrich-retries=")
-        ? arg.slice("--enrich-retries=".length)
-        : argv[++i] ?? "";
-      const retries = Number(value);
-      if (!Number.isInteger(retries) || retries < 0 || retries > 2) {
-        return { kind: "invalid-retries", value };
-      }
-      options.enrichRetries = retries;
-      continue;
-    }
-    return { kind: "unknown", flag: arg };
-  }
-  return { kind: "run", ...options };
-}
-
 function usageWithAutomationOptions(ui: (typeof UI)[Lang]): string {
   return `${ui.usage}\n\n${ui.automationUsage}`;
 }
@@ -526,6 +379,8 @@ export async function main(): Promise<void> {
     let repoFacts: RepoFacts | undefined;
     let baselineHash: string | undefined;
     let enrichMetrics: EnrichMetrics | undefined;
+    let scanWarnings: readonly string[] = [];
+    let scanStats: RepoSignals["scanStats"];
     const results = await runCli(process.cwd(), {
       lang,
       config: loadedConfig.config,
@@ -551,7 +406,15 @@ export async function main(): Promise<void> {
       onFacts: (facts) => {
         repoFacts = facts;
       },
+      onScanWarnings: (warnings) => {
+        scanWarnings = warnings;
+      },
+      onScanStats: (stats) => {
+        scanStats = stats;
+      },
+      useScannerWorker: true,
     });
+    if (!machineOutput) for (const warning of scanWarnings) console.warn(warning);
     let activationResults: ActivationResult[] = [];
     if (apply) {
       if (!baselineHash) throw new Error("generation baseline was not produced");
@@ -573,6 +436,8 @@ export async function main(): Promise<void> {
         JSON.stringify({
           mode: action.check ? "check" : action.dryRun ? "dry-run" : apply ? "apply" : "write",
           configWarnings: loadedConfig.warnings,
+          scanWarnings,
+          scanStats,
           facts: repoFacts,
           wouldCreate: action.check ? missing.length : written.length,
           missing: missing.map((file) => file.path),

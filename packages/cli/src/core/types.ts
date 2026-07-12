@@ -53,6 +53,9 @@ export interface RepoSignals {
   githubWorkflows?: { path: string; content: string }[];
   /** Archivos locales de guía/configuración seleccionados de forma conservadora. */
   guidanceFiles?: { path: string; content: string }[];
+  /** Non-fatal conditions that may make repository detection incomplete. */
+  scanWarnings?: string[];
+  scanStats?: { files: number; durationMs: number; truncated: boolean; mode?: "sync" | "worker" | "sync-fallback" };
 }
 
 export type Confidence = "high" | "low";
