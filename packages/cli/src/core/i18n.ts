@@ -76,13 +76,21 @@ export interface UiTexts {
   automationUsage: string;
   unknownOption: (flag: string) => string;
   invalidLang: (value: string) => string;
+  invalidAssistant: (value: string) => string;
+  missingFlagValue: (flag: string) => string;
+  assistantNotAvailable: (assistant: string) => string;
   noTtyWarning: string;
   skippedQuestion: (message: string) => string;
-  polishDetected: (assistant: string) => string;
-  polishConfirm: (assistant: string) => string;
-  polishFailed: (assistant: string, error: string) => string;
-  polishPrompt: (content: string) => string;
-  polishBatchPrompt: (filesJson: string) => string;
+  enrichDetected: (assistant: string) => string;
+  enrichConfirm: (assistant: string) => string;
+  enrichWorking: (assistant: string) => string;
+  enrichDone: string;
+  enrichKept: string;
+  enrichFailed: (assistant: string, error: string) => string;
+  enrichNoAssistant: string;
+  enrichEvidenceDropped: (paths: readonly string[]) => string;
+  enrichRetrying: (assistant: string) => string;
+  enrichPrompt: (filesJson: string, mustKeep: readonly string[], existingDocsJson?: string) => string;
   fileSkipped: (path: string) => string;
   outroWritten: string;
   outroNothing: string;
@@ -117,6 +125,7 @@ export const UI: Record<Lang, UiTexts> = {
 
 Uso:
   npx agent-rules-init            escanea el directorio actual y genera los archivos *.generated.*
+  npx agent-rules-init --enrich   además, usa tu claude/codex instalado para analizar el código y enriquecer el resultado
   npx agent-rules-init --lang es  fuerza el idioma del contenido (es|en); por defecto se detecta del sistema
   npx agent-rules-init --help     muestra esta ayuda
   npx agent-rules-init --version  muestra la versión
@@ -127,22 +136,52 @@ revisa su contenido y quita el sufijo para activarlos.`,
   --dry-run         renderiza y muestra archivos sin escribir
   --check           termina con error si faltan archivos generados; nunca escribe
   --json            emite un único resultado JSON legible por máquinas
-  --non-interactive omite preguntas y el pulido con IA`,
+  --non-interactive omite preguntas y la oferta de enriquecimiento con IA
+  --enrich          fuerza el enriquecimiento con IA sin preguntar (también sin TTY; combinable con --non-interactive)
+  --assistant <id>  elige el asistente para enriquecer: claude o codex (por defecto, el primero instalado)
+  --model <modelo>  modelo a usar, pasado tal cual al asistente (p. ej. haiku, gpt-5.5); por defecto, el del asistente`,
     unknownOption: (flag) => `Opción no reconocida: ${flag}`,
     invalidLang: (value) => `Valor de --lang no válido: "${value}" (usa "es" o "en").`,
+    invalidAssistant: (value) => `Valor de --assistant no válido: "${value}" (usa "claude" o "codex").`,
+    missingFlagValue: (flag) => `La opción ${flag} requiere un valor.`,
+    assistantNotAvailable: (assistant) =>
+      `Se pidió ${assistant} con --assistant pero no está instalado; se conserva la versión generada.`,
     noTtyWarning:
       "No se detectó una terminal interactiva (esto pasa a veces en Git Bash en Windows). " +
-      "Continuando sin preguntas ni oferta de pulido con IA; se usarán los valores detectados.",
+      "Continuando sin preguntas ni oferta de enriquecimiento con IA; se usarán los valores detectados.",
     skippedQuestion: (message) =>
       `No se detectó una terminal interactiva; se omite la pregunta "${message}" y se usa el valor detectado.`,
-    polishDetected: (assistant) => `${assistant} detectado — puede ayudar a pulir la redacción final.`,
-    polishConfirm: (assistant) => `Se detectó ${assistant}. ¿Quieres que pula la redacción final?`,
-    polishFailed: (assistant, error) =>
-      `No se pudo pulir el contenido con ${assistant}, se mantiene el original: ${error}`,
-    polishPrompt: (content) =>
-      `Pule la redacción del siguiente documento de instrucciones para un agente de IA, sin cambiar su significado ni estructura. Devuelve únicamente el documento pulido, sin comentarios ni explicaciones adicionales:\n\n${content}`,
-    polishBatchPrompt: (filesJson) =>
-      "Pule la redacción de estos archivos de instrucciones sin cambiar su significado, estructura, rutas ni formato Markdown. " +
+    enrichDetected: (assistant) =>
+      `${assistant} detectado — puede analizar el código de este repo y sustituir las secciones genéricas por reglas específicas verificadas.`,
+    enrichConfirm: (assistant) =>
+      `¿Quieres que ${assistant} analice el repositorio y enriquezca los archivos generados? Usará tu instalación de ${assistant} y puede tardar unos minutos.`,
+    enrichWorking: (assistant) => `${assistant} está analizando el repositorio y enriqueciendo los archivos…`,
+    enrichDone: "Archivos enriquecidos con lo observado en el repositorio.",
+    enrichKept: "No se aplicó el enriquecimiento; se conserva la versión generada.",
+    enrichFailed: (assistant, error) =>
+      `No se pudo enriquecer el contenido con ${assistant}, se mantiene la versión generada: ${error}`,
+    enrichNoAssistant:
+      "Se pidió --enrich pero no se encontró ningún asistente (claude o codex) instalado; se conserva la versión generada.",
+    enrichEvidenceDropped: (paths) =>
+      `Se descartaron afirmaciones del enriquecimiento porque su evidencia citada no existe en el repo: ${paths.join(", ")}`,
+    enrichRetrying: (assistant) => `La respuesta de ${assistant} no pasó la validación; se reintenta una vez…`,
+    enrichPrompt: (filesJson, mustKeep, existingDocsJson) =>
+      "Estás ejecutándote en la raíz de un repositorio. Los siguientes archivos de instrucciones para agentes de IA " +
+      "se generaron solo a partir de manifiestos, CI y configuración, por lo que algunas secciones (convenciones, arquitectura, prompts) son genéricas.\n" +
+      "Primero investiga el repositorio real con tus herramientas de lectura: configuración de estilo (linter, formatter, pre-commit), " +
+      "CONTRIBUTING/README, y el código fuente y los tests suficientes para entender sus convenciones y arquitectura reales.\n" +
+      "Después reescribe cada archivo sustituyendo o ampliando los consejos genéricos con reglas específicas y comprobables de este repositorio, " +
+      "citando la evidencia de cada afirmación nueva con el formato (evidencia: `ruta/del/archivo`); las rutas citadas se verificarán contra el repo. " +
+      "No inventes comandos, rutas ni APIs; no afirmes nada que no hayas comprobado. " +
+      "Conserva el idioma, el formato Markdown y las rutas de cada archivo.\n" +
+      (mustKeep.length > 0
+        ? `Conserva literalmente estos comandos, sin modificarlos: ${mustKeep.map((c) => `\`${c}\``).join(", ")}.\n`
+        : "") +
+      (existingDocsJson
+        ? "El repositorio ya contiene estos documentos de instrucciones mantenidos a mano; reflejan la intención del equipo. " +
+          "Integra sus reglas en los archivos generados correspondientes sin contradecirlas ni perderlas.\n" +
+          `Documentos existentes (JSON):\n${existingDocsJson}\n`
+        : "") +
       "Devuelve únicamente un array JSON válido con exactamente los mismos objetos path/content y en el mismo orden, sin bloque de código ni comentarios. " +
       `Entrada JSON:\n${filesJson}`,
     fileSkipped: (path) => `${path}: ya existía, se conserva sin cambios.`,
@@ -199,6 +238,7 @@ revisa su contenido y quita el sufijo para activarlos.`,
 
 Usage:
   npx agent-rules-init            scan the current directory and generate the *.generated.* files
+  npx agent-rules-init --enrich   additionally, use your installed claude/codex to analyze the code and enrich the output
   npx agent-rules-init --lang en  force the content language (es|en); defaults to the system locale
   npx agent-rules-init --help     show this help
   npx agent-rules-init --version  show the version
@@ -209,21 +249,52 @@ review their content and drop the suffix to activate them.`,
   --dry-run         render and print files without writing
   --check           exit non-zero if generated files are missing; never write
   --json            emit a single machine-readable JSON result
-  --non-interactive skip questions and AI polishing`,
+  --non-interactive skip questions and the AI-enrichment offer
+  --enrich          force AI enrichment without asking (works without a TTY; composable with --non-interactive)
+  --assistant <id>  pick the enrichment assistant: claude or codex (defaults to the first one installed)
+  --model <model>   model to use, forwarded verbatim to the assistant (e.g. haiku, gpt-5.5); defaults to the assistant's own`,
     unknownOption: (flag) => `Unknown option: ${flag}`,
     invalidLang: (value) => `Invalid --lang value: "${value}" (use "es" or "en").`,
+    invalidAssistant: (value) => `Invalid --assistant value: "${value}" (use "claude" or "codex").`,
+    missingFlagValue: (flag) => `The ${flag} option requires a value.`,
+    assistantNotAvailable: (assistant) =>
+      `${assistant} was requested with --assistant but is not installed; keeping the generated version.`,
     noTtyWarning:
       "No interactive terminal detected (this sometimes happens in Git Bash on Windows). " +
-      "Continuing without questions or the AI-polish offer; detected values will be used.",
+      "Continuing without questions or the AI-enrichment offer; detected values will be used.",
     skippedQuestion: (message) =>
       `No interactive terminal detected; skipping the question "${message}" and using the detected value.`,
-    polishDetected: (assistant) => `${assistant} detected — it can help polish the final wording.`,
-    polishConfirm: (assistant) => `${assistant} was detected. Do you want it to polish the final wording?`,
-    polishFailed: (assistant, error) => `Couldn't polish the content with ${assistant}, keeping the original: ${error}`,
-    polishPrompt: (content) =>
-      `Polish the wording of the following instructions document for an AI agent, without changing its meaning or structure. Return only the polished document, with no extra comments or explanations:\n\n${content}`,
-    polishBatchPrompt: (filesJson) =>
-      "Polish the wording of these instruction files without changing their meaning, structure, paths, or Markdown format. " +
+    enrichDetected: (assistant) =>
+      `${assistant} detected — it can analyze this repo's code and replace the generic sections with verified, repo-specific rules.`,
+    enrichConfirm: (assistant) =>
+      `Do you want ${assistant} to analyze the repository and enrich the generated files? It will use your ${assistant} installation and may take a few minutes.`,
+    enrichWorking: (assistant) => `${assistant} is analyzing the repository and enriching the files…`,
+    enrichDone: "Files enriched with what was observed in the repository.",
+    enrichKept: "Enrichment was not applied; keeping the generated version.",
+    enrichFailed: (assistant, error) =>
+      `Couldn't enrich the content with ${assistant}, keeping the generated version: ${error}`,
+    enrichNoAssistant:
+      "--enrich was requested but no installed assistant (claude or codex) was found; keeping the generated version.",
+    enrichEvidenceDropped: (paths) =>
+      `Dropped enrichment claims because their cited evidence does not exist in the repo: ${paths.join(", ")}`,
+    enrichRetrying: (assistant) => `${assistant}'s response failed validation; retrying once…`,
+    enrichPrompt: (filesJson, mustKeep, existingDocsJson) =>
+      "You are running at the root of a repository. The following instruction files for AI agents were generated " +
+      "from manifests, CI and configuration only, so some sections (conventions, architecture, prompts) are generic.\n" +
+      "First investigate the actual repository with your read tools: style configuration (linter, formatter, pre-commit), " +
+      "CONTRIBUTING/README, and enough of the source code and tests to understand its real conventions and architecture.\n" +
+      "Then rewrite each file, replacing or extending the generic advice with specific, verifiable rules from this repository, " +
+      "citing the evidence for every new claim in the form (evidence: `path/to/file`); cited paths will be checked against the repo. " +
+      "Do not invent commands, paths or APIs; do not state anything you have not verified. " +
+      "Keep each file's language, Markdown format and path.\n" +
+      (mustKeep.length > 0
+        ? `Keep these commands verbatim, unmodified: ${mustKeep.map((c) => `\`${c}\``).join(", ")}.\n`
+        : "") +
+      (existingDocsJson
+        ? "The repository already contains these hand-maintained instruction documents; they reflect the team's intent. " +
+          "Integrate their rules into the corresponding generated files without contradicting or losing them.\n" +
+          `Existing documents (JSON):\n${existingDocsJson}\n`
+        : "") +
       "Return only a valid JSON array with exactly the same path/content objects in the same order, without a code fence or commentary. " +
       `Input JSON:\n${filesJson}`,
     fileSkipped: (path) => `${path}: already existed, left unchanged.`,

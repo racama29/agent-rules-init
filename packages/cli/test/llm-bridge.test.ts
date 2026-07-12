@@ -1,5 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { detectAvailableAssistants, polishFilesWithAssistant, polishWithAssistant } from "../src/core/llm-bridge.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { detectAvailableAssistants, enrichFilesWithAssistant } from "../src/core/llm-bridge.js";
 
 describe("detectAvailableAssistants", () => {
   it("returns both assistants when both exec calls succeed", async () => {
@@ -24,42 +27,81 @@ describe("detectAvailableAssistants", () => {
   });
 });
 
-describe("polishWithAssistant", () => {
-  it("passes the content via stdin (never as a CLI argument) and returns stdout", async () => {
-    const execFn = vi.fn().mockResolvedValue({ stdout: "polished content", exitCode: 0 });
-    const result = await polishWithAssistant("claude", "raw content", execFn);
-    expect(result).toBe("polished content");
-    expect(execFn).toHaveBeenCalledWith("claude", ["-p"], expect.stringContaining("raw content"));
-  });
-
-  it("includes multi-line content in stdin without truncation", async () => {
-    const execFn = vi.fn().mockResolvedValue({ stdout: "polished", exitCode: 0 });
-    const multilineContent = "# Title\n\n- one\n- two\n\n## Section\nsome text";
-    await polishWithAssistant("claude", multilineContent, execFn);
-    const stdinArg = execFn.mock.calls[0][2];
-    expect(stdinArg).toContain(multilineContent);
-  });
-
-  it("falls back to the original content if the exec call fails", async () => {
-    const execFn = vi.fn().mockRejectedValue(new Error("auth error"));
-    const result = await polishWithAssistant("codex", "raw content", execFn);
-    expect(result).toBe("raw content");
-  });
-});
-
-describe("polishFilesWithAssistant", () => {
+describe("enrichFilesWithAssistant", () => {
   const files = [
-    { path: "CLAUDE.generated.md", content: "raw one" },
+    { path: "CLAUDE.generated.md", content: "raw one\ntest: `npm test`" },
     { path: "AGENTS.generated.md", content: "raw two" },
   ];
 
-  it("polishes a normal run with one assistant process", async () => {
-    const response = files.map((file) => ({ ...file, content: `polished ${file.content}` }));
+  it("enriches a normal run with one assistant process and passes the prompt via stdin", async () => {
+    const response = files.map((file) => ({ ...file, content: `enriched ${file.content}` }));
     const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(response), exitCode: 0 });
-    const result = await polishFilesWithAssistant("claude", files, execFn, "en");
+    const result = await enrichFilesWithAssistant("claude", files, { execFn, lang: "en" });
     expect(execFn).toHaveBeenCalledTimes(1);
-    expect(result.map((f) => f.content)).toEqual(["polished raw one", "polished raw two"]);
-    expect(execFn.mock.calls[0][2]).toContain("CLAUDE.generated.md");
+    expect(result.map((f) => f.content)).toEqual([
+      "enriched raw one\ntest: `npm test`",
+      "enriched raw two",
+    ]);
+    const stdinArg = execFn.mock.calls[0][2];
+    expect(stdinArg).toContain("CLAUDE.generated.md");
+    expect(stdinArg).toContain("investigate the actual repository");
+  });
+
+  it("invokes codex through `codex exec -` (codex has no -p flag)", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(files), exitCode: 0 });
+    await enrichFilesWithAssistant("codex", files, { execFn });
+    expect(execFn).toHaveBeenCalledWith(
+      "codex",
+      ["exec", "--skip-git-repo-check", "-"],
+      expect.any(String),
+      undefined
+    );
+  });
+
+  it("forwards the model verbatim to each assistant's CLI", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(files), exitCode: 0 });
+    await enrichFilesWithAssistant("claude", files, { execFn, model: "haiku" });
+    expect(execFn).toHaveBeenCalledWith("claude", ["-p", "--model", "haiku"], expect.any(String), undefined);
+    await enrichFilesWithAssistant("codex", files, { execFn, model: "gpt-5.5" });
+    expect(execFn).toHaveBeenCalledWith(
+      "codex",
+      ["exec", "--skip-git-repo-check", "--model", "gpt-5.5", "-"],
+      expect.any(String),
+      undefined
+    );
+  });
+
+  it("includes existing hand-maintained docs in the prompt", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(files), exitCode: 0 });
+    await enrichFilesWithAssistant("claude", files, {
+      execFn,
+      lang: "en",
+      existingDocs: [{ path: "CLAUDE.md", content: "manual rule: never break the public API" }],
+    });
+    const stdinArg = execFn.mock.calls[0][2];
+    expect(stdinArg).toContain("hand-maintained instruction documents");
+    expect(stdinArg).toContain("manual rule: never break the public API");
+  });
+
+  it("spawns the assistant in the provided repo root", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(files), exitCode: 0 });
+    await enrichFilesWithAssistant("claude", files, { execFn, cwd: "/repo/root" });
+    expect(execFn).toHaveBeenCalledWith("claude", ["-p"], expect.any(String), "/repo/root");
+  });
+
+  it("lists the must-keep commands in the prompt", async () => {
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(files), exitCode: 0 });
+    await enrichFilesWithAssistant("claude", files, { execFn, lang: "en", mustKeep: ["npm test"] });
+    expect(execFn.mock.calls[0][2]).toContain("Keep these commands verbatim");
+    expect(execFn.mock.calls[0][2]).toContain("`npm test`");
+  });
+
+  it("accepts JSON preceded by assistant prose", async () => {
+    const execFn = vi.fn().mockResolvedValue({
+      stdout: `He investigado el repositorio y aquí está el resultado:\n\n${JSON.stringify(files)}`,
+      exitCode: 0,
+    });
+    await expect(enrichFilesWithAssistant("claude", files, { execFn })).resolves.toEqual(files);
   });
 
   it("accepts JSON wrapped in a Markdown fence", async () => {
@@ -67,11 +109,134 @@ describe("polishFilesWithAssistant", () => {
       stdout: `\`\`\`json\n${JSON.stringify(files)}\n\`\`\``,
       exitCode: 0,
     });
-    await expect(polishFilesWithAssistant("codex", files, execFn)).resolves.toEqual(files);
+    await expect(enrichFilesWithAssistant("codex", files, { execFn })).resolves.toEqual(files);
   });
 
-  it("keeps every original file if the assistant changes paths or returns invalid JSON", async () => {
+  it("retries once and keeps every original file if the assistant persistently changes paths", async () => {
     const execFn = vi.fn().mockResolvedValue({ stdout: '[{"path":"wrong","content":"x"}]', exitCode: 0 });
-    await expect(polishFilesWithAssistant("codex", files, execFn)).resolves.toEqual(files);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(enrichFilesWithAssistant("codex", files, { execFn })).resolves.toEqual(files);
+    expect(execFn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it("recovers when the second attempt returns a valid response", async () => {
+    const execFn = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: "not json at all", exitCode: 0 })
+      .mockResolvedValueOnce({ stdout: JSON.stringify(files), exitCode: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(enrichFilesWithAssistant("claude", files, { execFn })).resolves.toEqual(files);
+    expect(execFn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  it("keeps the originals when the assistant drops a canonical command", async () => {
+    const response = [
+      { path: "CLAUDE.generated.md", content: "rewritten without the test command" },
+      { path: "AGENTS.generated.md", content: "rewritten two" },
+    ];
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(response), exitCode: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(
+      enrichFilesWithAssistant("claude", files, { execFn, lang: "en", mustKeep: ["npm test"] })
+    ).resolves.toEqual(files);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("npm test"));
+    warn.mockRestore();
+  });
+
+  it("does not reject a must-keep command that never appeared in the originals", async () => {
+    const response = files.map((file) => ({ ...file, content: `enriched ${file.content}` }));
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(response), exitCode: 0 });
+    const result = await enrichFilesWithAssistant("claude", files, {
+      execFn,
+      mustKeep: ["cargo test --workspace"],
+    });
+    expect(result.map((f) => f.content)).toEqual(response.map((f) => f.content));
+  });
+
+  it("falls back to the original files if the exec call fails", async () => {
+    const execFn = vi.fn().mockRejectedValue(new Error("auth error"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(enrichFilesWithAssistant("claude", files, { execFn })).resolves.toEqual(files);
+    warn.mockRestore();
+  });
+});
+
+describe("evidence verification", () => {
+  let repoDir: string;
+
+  beforeEach(() => {
+    repoDir = fs.mkdtempSync(path.join(os.tmpdir(), "enrich-evidence-"));
+    fs.mkdirSync(path.join(repoDir, "src"));
+    fs.writeFileSync(path.join(repoDir, "pyproject.toml"), "[project]");
+    fs.writeFileSync(path.join(repoDir, "src", "app.py"), "app = 1");
+  });
+
+  afterEach(() => {
+    fs.rmSync(repoDir, { recursive: true, force: true });
+  });
+
+  const original = [{ path: "CLAUDE.generated.md", content: "raw" }];
+
+  async function enrichWith(content: string) {
+    const execFn = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify([{ path: "CLAUDE.generated.md", content }]),
+      exitCode: 0,
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await enrichFilesWithAssistant("claude", original, { execFn, lang: "en", cwd: repoDir });
+    return { content: result[0].content, warn };
+  }
+
+  it("drops bullet claims whose cited evidence does not exist in the repo", async () => {
+    const { content, warn } = await enrichWith(
+      [
+        "- valid claim (evidence: `pyproject.toml [tool.ruff]`)",
+        "- hallucinated claim (evidence: `docs/style-guide.md`)",
+        "- claim with line ref (evidencia: `src/app.py:12`)",
+      ].join("\n")
+    );
+    expect(content).toContain("valid claim");
+    expect(content).toContain("claim with line ref");
+    expect(content).not.toContain("hallucinated claim");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("docs/style-guide.md"));
+    warn.mockRestore();
+  });
+
+  it("keeps a claim when at least one cited path exists", async () => {
+    const { content, warn } = await enrichWith(
+      "- mixed claim (evidence: `pyproject.toml`, `missing/file.py`)"
+    );
+    expect(content).toContain("mixed claim");
+    warn.mockRestore();
+  });
+
+  it("keeps prose lines with unverifiable evidence but reports them", async () => {
+    const { content, warn } = await enrichWith(
+      "The layout follows a src pattern (evidence: `nonexistent.cfg`)."
+    );
+    expect(content).toContain("The layout follows a src pattern");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("nonexistent.cfg"));
+    warn.mockRestore();
+  });
+
+  it("ignores lines without checkable path citations", async () => {
+    const { content, warn } = await enrichWith(
+      "- follows PEP 8 (evidence: the project docs)\n- plain rule without citations"
+    );
+    expect(content).toContain("follows PEP 8");
+    expect(content).toContain("plain rule without citations");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("does not verify evidence when no cwd is provided", async () => {
+    const execFn = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify([{ path: "CLAUDE.generated.md", content: "- x (evidence: `missing.md`)" }]),
+      exitCode: 0,
+    });
+    const result = await enrichFilesWithAssistant("claude", original, { execFn, lang: "en" });
+    expect(result[0].content).toContain("missing.md");
   });
 });

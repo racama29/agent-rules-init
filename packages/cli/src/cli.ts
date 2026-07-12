@@ -24,7 +24,13 @@ import {
   hasInteractiveTty,
   type PromptFn,
 } from "./core/prompt-engine.js";
-import { detectAvailableAssistants, polishFilesWithAssistant, defaultExecFn, type ExecFn } from "./core/llm-bridge.js";
+import {
+  detectAvailableAssistants,
+  enrichFilesWithAssistant,
+  defaultExecFn,
+  type AssistantId,
+  type ExecFn,
+} from "./core/llm-bridge.js";
 import type { Pack, RepoFacts } from "./core/types.js";
 import { jsTsPack } from "./packs/js-ts.js";
 import { pythonPack } from "./packs/python.js";
@@ -67,8 +73,14 @@ export interface RunCliOptions {
   lang?: Lang;
   /** Generate results without changing the filesystem. */
   dryRun?: boolean;
-  /** Do not prompt or offer AI polishing. */
+  /** Do not prompt or offer AI enrichment. */
   nonInteractive?: boolean;
+  /** Run AI enrichment without asking, even without a TTY. Ignored when skipLlm or noAi apply. */
+  enrich?: boolean;
+  /** Assistant to enrich with; defaults to the first one installed. */
+  assistant?: AssistantId;
+  /** Model forwarded verbatim to the assistant CLI; its default when omitted. */
+  model?: string;
   /** Receives the rendered files before they are written (or planned). */
   onGeneratedFiles?: (files: readonly GeneratedFile[]) => void;
   /** Preloaded repository configuration; loaded from disk when omitted. */
@@ -76,6 +88,23 @@ export interface RunCliOptions {
   onConfigWarnings?: (warnings: readonly string[]) => void;
   /** Receives the facts extracted from the repo (including canonical commands). */
   onFacts?: (facts: RepoFacts) => void;
+}
+
+// Final-name docs the tool itself would generate; when they already exist they carry the
+// team's hand-written intent, so enrichment must integrate them instead of ignoring them.
+const EXISTING_DOC_PATHS = ["CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md"];
+const MAX_EXISTING_DOC_CHARS = 20_000;
+
+function readExistingDocs(rootPath: string): GeneratedFile[] {
+  const docs: GeneratedFile[] = [];
+  for (const relativePath of EXISTING_DOC_PATHS) {
+    const absolutePath = path.join(rootPath, relativePath);
+    if (!fs.existsSync(absolutePath)) continue;
+    const content = fs.readFileSync(absolutePath, "utf8");
+    if (content.trim() === "") continue;
+    docs.push({ path: relativePath, content: content.slice(0, MAX_EXISTING_DOC_CHARS) });
+  }
+  return docs;
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
@@ -139,15 +168,42 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     if (scoped) files.push(scoped);
   }
 
-  if (!options.skipLlm && !config.noAi && !options.nonInteractive && hasInteractiveTty()) {
+  const wantsEnrich = options.enrich === true;
+  const canOfferEnrich = !options.nonInteractive && hasInteractiveTty();
+  if (!options.skipLlm && !config.noAi && (wantsEnrich || canOfferEnrich)) {
+    // With --enrich there may be no TTY (scripts, CI); route progress through stderr so
+    // stdout stays parseable in --json mode.
+    const notify = canOfferEnrich ? (message: string) => clack.log.info(message) : (message: string) => console.warn(message);
     const assistants = await detectAvailableAssistants(execFn);
-    if (assistants.length > 0) {
-      const chosenAssistant = assistants[0];
-      clack.log.info(ui.polishDetected(chosenAssistant));
-      const usePolish = await clack.confirm({ message: ui.polishConfirm(chosenAssistant) });
-      if (usePolish === true) {
-        const polished = await polishFilesWithAssistant(chosenAssistant, files, execFn, lang);
-        files.splice(0, files.length, ...polished);
+    const requested = options.assistant;
+    if (requested && !assistants.includes(requested)) {
+      console.warn(ui.assistantNotAvailable(requested));
+    } else if (assistants.length === 0) {
+      if (wantsEnrich) console.warn(ui.enrichNoAssistant);
+    } else {
+      const chosenAssistant = requested ?? assistants[0];
+      let proceed = wantsEnrich;
+      if (!proceed) {
+        clack.log.info(ui.enrichDetected(chosenAssistant));
+        proceed = (await clack.confirm({ message: ui.enrichConfirm(chosenAssistant) })) === true;
+      }
+      if (proceed) {
+        const spinner = canOfferEnrich ? clack.spinner() : undefined;
+        if (spinner) spinner.start(ui.enrichWorking(chosenAssistant));
+        else notify(ui.enrichWorking(chosenAssistant));
+        const enriched = await enrichFilesWithAssistant(chosenAssistant, files, {
+          execFn,
+          lang,
+          cwd: rootPath,
+          mustKeep: facts.canonical.map((c) => c.command),
+          existingDocs: readExistingDocs(rootPath),
+          model: options.model,
+        });
+        const changed = enriched.some((file, i) => file.content !== files[i].content);
+        const outcome = changed ? ui.enrichDone : ui.enrichKept;
+        if (spinner) spinner.stop(outcome);
+        else notify(outcome);
+        files.splice(0, files.length, ...enriched);
       }
     }
   }
@@ -168,6 +224,9 @@ export interface CliRunOptions {
   check?: true;
   json?: true;
   nonInteractive?: true;
+  enrich?: true;
+  assistant?: AssistantId;
+  model?: string;
 }
 
 export type CliAction =
@@ -175,10 +234,16 @@ export type CliAction =
   | { kind: "help" }
   | { kind: "version" }
   | { kind: "invalid-lang"; value: string }
+  | { kind: "invalid-assistant"; value: string }
+  | { kind: "missing-value"; flag: string }
   | { kind: "unknown"; flag: string };
 
 function isLang(value: string | undefined): value is Lang {
   return value === "es" || value === "en";
+}
+
+function isAssistant(value: string | undefined): value is AssistantId {
+  return value === "claude" || value === "codex";
 }
 
 export function resolveCliAction(argv: string[]): CliAction {
@@ -207,6 +272,22 @@ export function resolveCliAction(argv: string[]): CliAction {
     }
     if (arg === "--non-interactive") {
       options.nonInteractive = true;
+      continue;
+    }
+    if (arg === "--enrich") {
+      options.enrich = true;
+      continue;
+    }
+    if (arg === "--assistant" || arg.startsWith("--assistant=")) {
+      const value = arg.startsWith("--assistant=") ? arg.slice("--assistant=".length) : argv[++i] ?? "";
+      if (!isAssistant(value)) return { kind: "invalid-assistant", value };
+      options.assistant = value;
+      continue;
+    }
+    if (arg === "--model" || arg.startsWith("--model=")) {
+      const value = arg.startsWith("--model=") ? arg.slice("--model=".length) : argv[++i] ?? "";
+      if (value === "") return { kind: "missing-value", flag: "--model" };
+      options.model = value;
       continue;
     }
     return { kind: "unknown", flag: arg };
@@ -248,10 +329,24 @@ export async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  if (action.kind === "invalid-assistant") {
+    console.error(`${ui.invalidAssistant(action.value)}\n\n${usageWithAutomationOptions(ui)}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (action.kind === "missing-value") {
+    console.error(`${ui.missingFlagValue(action.flag)}\n\n${usageWithAutomationOptions(ui)}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const machineOutput = action.json === true;
   const planningOnly = action.dryRun === true || action.check === true;
   const nonInteractive = action.nonInteractive === true || machineOutput || planningOnly;
+  // Enrichment output is non-deterministic, so --check (freshness comparison) must stay
+  // on the deterministic baseline.
+  const enrich = action.enrich === true && action.check !== true;
+  if (action.enrich === true && action.check === true) console.warn("--enrich is ignored with --check.");
 
   if (!machineOutput) clack.intro("agent-rules-init");
 
@@ -273,7 +368,10 @@ export async function main(): Promise<void> {
       config: loadedConfig.config,
       dryRun: planningOnly,
       nonInteractive,
-      skipLlm: nonInteractive,
+      skipLlm: nonInteractive && !enrich,
+      enrich,
+      assistant: action.assistant,
+      model: action.model,
       onGeneratedFiles: (files) => {
         generatedFiles = files;
       },

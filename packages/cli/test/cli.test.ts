@@ -27,6 +27,22 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+/** Simula un `claude` instalado que devuelve cada archivo con el contenido enriquecido. */
+function makeEnrichExecFn() {
+  return vi.fn().mockImplementation(async (command: string, args: string[], stdin?: string) => {
+    if (args[0] === "--version") {
+      if (command === "claude") return { stdout: "1.0.0", exitCode: 0 };
+      throw new Error("command not found");
+    }
+    const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+    const files = JSON.parse(filesJson) as { path: string; content: string }[];
+    return {
+      stdout: JSON.stringify(files.map((file) => ({ ...file, content: `ENRIQUECIDO\n${file.content}` }))),
+      exitCode: 0,
+    };
+  });
+}
+
 describe("resolveCliAction", () => {
   it("runs the generator when no flags are passed", () => {
     expect(resolveCliAction([])).toEqual({ kind: "run" });
@@ -60,6 +76,30 @@ describe("resolveCliAction", () => {
       lang: "en",
     });
     expect(resolveCliAction(["--check"])).toEqual({ kind: "run", check: true });
+  });
+
+  it("parses --enrich", () => {
+    expect(resolveCliAction(["--enrich"])).toEqual({ kind: "run", enrich: true });
+    expect(resolveCliAction(["--enrich", "--non-interactive"])).toEqual({
+      kind: "run",
+      enrich: true,
+      nonInteractive: true,
+    });
+  });
+
+  it("parses --assistant and --model", () => {
+    expect(resolveCliAction(["--assistant", "codex"])).toEqual({ kind: "run", assistant: "codex" });
+    expect(resolveCliAction(["--assistant=claude", "--model=haiku"])).toEqual({
+      kind: "run",
+      assistant: "claude",
+      model: "haiku",
+    });
+    expect(resolveCliAction(["--model", "gpt-5.5"])).toEqual({ kind: "run", model: "gpt-5.5" });
+  });
+
+  it("rejects an invalid --assistant value and a missing --model value", () => {
+    expect(resolveCliAction(["--assistant", "cursor"])).toEqual({ kind: "invalid-assistant", value: "cursor" });
+    expect(resolveCliAction(["--model"])).toEqual({ kind: "missing-value", flag: "--model" });
   });
 
   it("rejects an invalid --lang value", () => {
@@ -239,6 +279,75 @@ describe("runCli", () => {
 
     expect(promptFn).not.toHaveBeenCalled();
     expect(execFn).not.toHaveBeenCalled();
+  });
+
+  it("runs enrichment without prompting when enrich is set, even non-interactively", async () => {
+    const execFn = makeEnrichExecFn();
+    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
+
+    await runCli(tmpDir, { promptFn, execFn, nonInteractive: true, enrich: true });
+
+    expect(promptFn).not.toHaveBeenCalled();
+    const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
+    expect(claudeMd).toContain("ENRIQUECIDO");
+  });
+
+  it("spawns the assistant at the target repo root during enrichment", async () => {
+    const execFn = makeEnrichExecFn();
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] === "-p");
+    expect(enrichCall?.[3]).toBe(tmpDir);
+  });
+
+  it("passes existing hand-maintained docs to the assistant during enrichment", async () => {
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "REGLA-MANUAL: nunca romper la API pública");
+    const execFn = makeEnrichExecFn();
+
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] === "-p");
+    expect(enrichCall?.[2]).toContain("REGLA-MANUAL: nunca romper la API pública");
+  });
+
+  it("honors the requested assistant instead of the first detected one", async () => {
+    const execFn = vi.fn().mockImplementation(async (command: string, args: string[], stdin?: string) => {
+      if (args[0] === "--version") return { stdout: "1.0.0", exitCode: 0 };
+      const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+      const files = JSON.parse(filesJson) as { path: string; content: string }[];
+      return { stdout: JSON.stringify(files), exitCode: 0 };
+    });
+
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true, assistant: "codex", model: "gpt-5.5" });
+
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
+    expect(enrichCall?.[0]).toBe("codex");
+    expect(enrichCall?.[1]).toEqual(["exec", "--skip-git-repo-check", "--model", "gpt-5.5", "-"]);
+  });
+
+  it("warns and keeps the generated files when the requested assistant is not installed", async () => {
+    const execFn = vi.fn().mockImplementation(async (command: string) => {
+      if (command === "claude") return { stdout: "1.0.0", exitCode: 0 };
+      throw new Error("command not found");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const results = await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true, assistant: "codex" });
+
+    expect(results.find((r) => r.path === "CLAUDE.generated.md")?.status).toBe("written");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("codex"));
+    expect(execFn.mock.calls.every((call) => call[1][0] === "--version")).toBe(true);
+    warn.mockRestore();
+  });
+
+  it("keeps the generated files when enrich is set but no assistant is installed", async () => {
+    const execFn = vi.fn().mockRejectedValue(new Error("command not found"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const results = await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+
+    expect(results.find((r) => r.path === "CLAUDE.generated.md")?.status).toBe("written");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("generates CLAUDE.md, AGENTS.md, copilot-instructions and prompt files for a JS/TS repo", async () => {
