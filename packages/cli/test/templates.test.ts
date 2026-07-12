@@ -3,6 +3,8 @@ import {
   renderClaudeMd,
   renderAgentsMd,
   renderCopilotInstructions,
+  renderCursorRules,
+  renderGeminiMd,
   renderPromptFiles,
   renderRepoFacts,
 } from "../src/core/templates.js";
@@ -56,6 +58,20 @@ describe("templates", () => {
   it("renders copilot-instructions with the same rule content", () => {
     const content = renderCopilotInstructions(entries, undefined, "es");
     expect(content).toContain("Proyecto JavaScript/TypeScript con react.");
+  });
+
+  it("renders an always-applied Cursor MDC rule", () => {
+    const content = renderCursorRules(entries, undefined, "en");
+    expect(content).toContain("alwaysApply: true");
+    expect(content).toContain("# Repository rules");
+    expect(content).toContain("react");
+  });
+
+  it("renders Gemini CLI project context", () => {
+    const content = renderGeminiMd(entries, undefined, "en");
+    expect(content).toContain("# GEMINI.md");
+    expect(content).toContain("Operational rules");
+    expect(content).toContain("react");
   });
 
   it("renders genuinely different documents for each consumer", () => {

@@ -1,6 +1,6 @@
 {
   "name": "agent-rules-init",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Generates CLAUDE.md, AGENTS.md, copilot-instructions.md and prompt files from what your repo actually is.",
   "license": "MIT",
   "type": "module",
@@ -38,7 +38,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test:enrich": "npm run build && node scripts/smoke-enrichment.mjs",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",

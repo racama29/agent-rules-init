@@ -1,6 +1,6 @@
 # agent-rules-init
 
-Generate repository-specific instructions for Claude Code, Codex and GitHub Copilot from the manifests and commands that already exist in your project.
+Generate repository-specific instructions for Claude Code, Codex, GitHub Copilot, Cursor, Gemini CLI and Windsurf from the manifests and commands that already exist in your project.
 
 ```bash
 npx agent-rules-init
@@ -8,11 +8,19 @@ npx agent-rules-init
 
 The CLI detects JavaScript/TypeScript, Python, Java, PHP, Ruby, Go, Rust, C#/.NET, Kotlin, Swift, Dart/Flutter, C/C++, Elixir, Scala and R projects. It also understands mixed repositories and npm, pnpm, Yarn and Bun workspaces, generating package-scoped `AGENTS.generated.md` files.
 
-All output is written with a `.generated` suffix and existing files are never overwritten. Review the generated files and remove the suffix when you are ready to activate them.
+All output is written with a `.generated` suffix and existing files are never overwritten during generation. Review them and run `--apply` to activate with safe backups.
 
 Use `--lang es` or `--lang en` to select the output language. See the [full documentation](https://github.com/racama29/agent-rules-init#readme) for supported frameworks, generated files and contribution instructions.
 
-Automation is supported through `--dry-run`, `--check`, `--json` and `--non-interactive`. Repository defaults and per-project overrides can be stored in `.agent-rules-init.yml`.
+Automation is supported through `--dry-run`, `--force`, `--apply`, `--check`, `--json` and `--non-interactive`. Repository defaults, enrichment assistant/model and per-project overrides can be stored in `.agent-rules-init.yml`.
+
+Use `--apply` after review to activate staging files; replaced finals are backed up under `.agent-rules-init/backups/`.
+
+Complete generations store a git-ignored hash receipt so `--check` can verify deterministic or enriched active files without rerunning an assistant. Activated final files take precedence over staging during checks.
+
+AI enrichment runs assistants with read-only restrictions and falls back to deterministic output when invocation or validation fails. Review generated files before activation, especially when the repository did not come from a trusted source.
+
+Enrichment also reports batch, retry, input-size, fallback and duration metrics.
 
 Generated documents share an evidence-backed model but are not duplicates: Claude receives broad repository context, AGENTS receives operational commands and scope, and Copilot receives concise implementation conventions. Observed architecture and local conventions include their source files so specific claims can be audited.
 

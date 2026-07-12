@@ -32,6 +32,9 @@ exclude:
   - legacy/**
   - examples/**
 noAi: true
+enrich: true
+assistant: codex
+model: gpt-5.5
 projects:
   apps/web:
     framework: react
@@ -47,6 +50,9 @@ projects:
         lang: "es",
         exclude: ["legacy/**", "examples/**"],
         noAi: true,
+        enrich: true,
+        assistant: "codex",
+        model: "gpt-5.5",
         projects: {
           "apps/web": {
             framework: "react",
@@ -78,6 +84,9 @@ projects:
 lang: fr
 exclude: legacy/**
 noAi: yes
+enrich: yes
+assistant: cursor
+model: ""
 typo: true
 projects:
   apps/web:
@@ -94,6 +103,9 @@ projects:
         expect.stringContaining('"lang"'),
         expect.stringContaining('"exclude"'),
         expect.stringContaining('"noAi"'),
+        expect.stringContaining('"enrich"'),
+        expect.stringContaining('"assistant"'),
+        expect.stringContaining('"model"'),
         expect.stringContaining('"typo"'),
         expect.stringContaining('"projects.apps/web.framework"'),
         expect.stringContaining('"projects.apps/web.extra"'),

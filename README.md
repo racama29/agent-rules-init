@@ -6,7 +6,7 @@ Most AI coding assistants (Claude Code, Codex, Copilot, Cursor) get used as gene
 
 What sets it apart from asking an assistant to "write me a CLAUDE.md":
 
-- **One command, every assistant** — consistent configuration for Claude Code, Codex and Copilot at once, including ready-to-use `/review`, `/refactor` and `/testing` commands for each ecosystem.
+- **One command, every assistant** — consistent configuration for Claude Code, Codex, Copilot, Cursor, Gemini CLI and Windsurf at once, including ready-to-use `/review`, `/refactor` and `/testing` commands for each ecosystem.
 - **Evidence, not vibes** — commands come from your actual CI workflows and manifests, conventions from your actual config files, each claim with its source cited.
 - **AI as an amplifier, with guardrails** — with `claude` or `codex` installed, `--enrich` has your own assistant investigate the code and rewrite the generic sections with verified, repo-specific rules; its output is validated and canonical commands must survive verbatim, or the deterministic version is kept.
 - **Never destructive** — everything is written with a `.generated.` suffix; your hand-tuned files are read and integrated, never overwritten.
@@ -24,11 +24,15 @@ The CLI scans the repo, detects the stack(s) present, and generates a set of fil
 - `CLAUDE.generated.md`
 - `AGENTS.generated.md`
 - `.github/copilot-instructions.generated.md`
+- `.cursor/rules/repository.generated.mdc`
+- `GEMINI.generated.md`
 - `<workspace>/AGENTS.generated.md` for each nested JS/TS package
 - `.claude/commands/<stack>-{review,refactor,testing}.generated.md`
 - `.github/prompts/<stack>-{review,refactor,testing}.generated.prompt.md`
 
 (`<stack>` is one of the 15 listed below — if your repo mixes several, one set of prompts is generated per stack.)
+
+Windsurf consumes the root `AGENTS.md` directly, so it needs no duplicate vendor-specific file.
 
 Besides per-stack advice, the generated files include **facts extracted from your repo**:
 
@@ -47,13 +51,17 @@ If something cannot be inferred with confidence (e.g. the framework), the CLI as
 
 ## AI enrichment
 
-If you have `claude` or `codex` installed and authenticated, the CLI can use your own session to **enrich** the generated files: the assistant is launched at the repo root (`claude -p` / `codex exec -`), investigates the actual code (style configuration, `CONTRIBUTING`, sources and tests) and replaces the generic sections with repo-specific, evidence-backed rules.
+If you have `claude` or `codex` installed and authenticated, the CLI can use your own session to **enrich** the generated files. The assistant investigates style configuration, `CONTRIBUTING`, sources and tests, then replaces generic sections with repo-specific, evidence-backed rules.
+
+Enrichment is constrained to read-only operation: Codex runs in its read-only sandbox and an ephemeral session; Claude runs in safe mode with only `Read`, `Glob` and `Grep`. Repository content is still untrusted input, so review generated rules before activating them and avoid enrichment on an untrusted checkout when using an assistant version too old to support these safeguards. Unsupported safety flags fail closed and keep the deterministic output.
 
 - **Interactive runs** offer it with an explicit question — never automatic, and it may take a few minutes.
 - **`--enrich`** forces it without asking, also without a TTY, so scripts and onboarding docs can rely on it (`--check` ignores it: freshness comparison needs the deterministic baseline).
 - **You control the spend**: `--assistant claude|codex` picks which installed assistant to use, and `--model <id>` is forwarded verbatim to it (e.g. `--model haiku` for a cheaper run) — no model list is hardcoded, so new models work without updating this package. Without these flags it uses the first assistant found and that assistant's own default model.
 - **Existing `CLAUDE.md`, `AGENTS.md` or copilot instructions are respected**: they are handed to the assistant as the team's intent, to integrate — not contradict — in the enriched output.
 - **Guardrails**: the output is validated (same files, same order, valid JSON) and every canonical command must survive verbatim; any batch that fails validation falls back to the deterministic version. Cited evidence is checked too: claims citing files that don't exist in the repo are dropped and reported.
+- **Semantic safety**: newly introduced destructive instructions such as `rm -rf`, `git reset --hard` or download-and-pipe-to-shell commands invalidate the batch.
+- **Cost visibility**: terminal and JSON output report batches, attempts, characters sent, fallbacks and elapsed time; multi-process enrichment warns before starting.
 
 ## Options
 
@@ -65,7 +73,9 @@ npx agent-rules-init --lang en   # force the content language (es|en); defaults 
 npx agent-rules-init --help      # show help
 npx agent-rules-init --version   # show the version
 npx agent-rules-init --dry-run  # preview every file without writing
-npx agent-rules-init --check    # exit 1 when generated files are missing or outdated
+npx agent-rules-init --force    # refresh *.generated.* files, never activated final files
+npx agent-rules-init --apply    # activate reviewed staging files, backing up replaced finals
+npx agent-rules-init --check    # exit 1 when generated or activated files are missing/outdated
 npx agent-rules-init --json     # emit one machine-readable result
 npx agent-rules-init --non-interactive # skip questions and the AI-enrichment offer
 ```
@@ -76,7 +86,9 @@ Optional settings live in `.agent-rules-init.yml` (or `.yaml`):
 
 ```yaml
 lang: en
-noAi: true
+enrich: true
+assistant: codex
+model: gpt-5.5
 exclude:
   - legacy/**
 projects:
@@ -87,6 +99,28 @@ projects:
 ```
 
 Project overrides are applied to the package-scoped `AGENTS.generated.md`. Excluded JS/TS packages do not contribute dependencies, commands or scoped output.
+
+`enrich`, `assistant` and `model` make repeated team invocations reproducible. Explicit CLI flags take precedence. `noAi: true` disables enrichment regardless of those settings.
+
+## Before and after
+
+Without enrichment, a detected Python project receives safe stack-level guidance such as “run the repository test suite before finishing”. With enrichment, a Flask-style repository can receive evidence-backed rules such as:
+
+```md
+- Keep imports one per line; Ruff enforces `force-single-line = true`. (evidence: `pyproject.toml`)
+- Treat warnings as test failures and fix their source instead of filtering them. (evidence: `pyproject.toml`)
+- Keep `sansio/` independent from request and socket I/O. (evidence: `CONTRIBUTING.rst`)
+```
+
+The cited paths are checked before the enriched output is accepted. Claims whose cited files do not exist are reported and removed when they are standalone bullets.
+
+## Keeping rules fresh
+
+Run `npx agent-rules-init --force` after meaningful tooling or architecture changes. It replaces only `*.generated.*` staging files. Activated files such as `CLAUDE.md` and `AGENTS.md` are never overwritten.
+
+After reviewing staging, `npx agent-rules-init --apply` promotes exactly those files. Existing active files are copied first to a timestamped `.agent-rules-init/backups/` directory, which contains its own ignore rule. Use `--force --apply` only when you intentionally want to regenerate and activate in one command.
+
+Each complete generation records a git-ignored `.agent-rules-init.generated.json` receipt containing a deterministic baseline fingerprint and hashes of the accepted outputs. `--check` uses it to detect repository changes and validate enriched output without calling the model again. When an activated final file exists it takes precedence over staging, so a current `.generated` file can never hide a stale file that an assistant actually consumes. `--json` exposes `baselineCurrent` and per-file staging/active state for CI diagnostics.
 
 All generated content and CLI messages are available in **English and Spanish**. By default the language is detected from your system locale (`es-*` → Spanish, anything else → English).
 
@@ -124,7 +158,7 @@ Adding support for a new stack means implementing the `Pack` interface in a file
 
 ## En español
 
-`agent-rules-init` genera `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md` y prompts de review/refactor/testing a partir del stack detectado en tu repo, más los hechos reales del proyecto (comandos declarados, estructura, lo que ejecuta CI). Todo se crea con sufijo `.generated.` y nunca sobrescribe nada: revisa y quita el sufijo para activar.
+`agent-rules-init` genera `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md` y prompts de review/refactor/testing a partir del stack detectado en tu repo, más los hechos reales del proyecto (comandos declarados, estructura, lo que ejecuta CI). Todo se crea con sufijo `.generated.` y nunca sobrescribe nada: revisa y usa `--apply` para activar con backup seguro.
 
 Con `claude` o `codex` instalados, `--enrich` (o la pregunta interactiva) hace que tu propio asistente investigue el código y sustituya las secciones genéricas por reglas específicas del repo con evidencia citada; si ya tienes un `CLAUDE.md` o `AGENTS.md` a mano, se integra en el resultado en vez de ignorarse. La salida se valida y, si algo falla, se conserva la versión determinista.
 

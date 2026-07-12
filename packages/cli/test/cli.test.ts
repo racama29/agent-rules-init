@@ -76,6 +76,8 @@ describe("resolveCliAction", () => {
       lang: "en",
     });
     expect(resolveCliAction(["--check"])).toEqual({ kind: "run", check: true });
+    expect(resolveCliAction(["--force"])).toEqual({ kind: "run", force: true });
+    expect(resolveCliAction(["--apply"])).toEqual({ kind: "run", apply: true });
   });
 
   it("parses --enrich", () => {
@@ -203,6 +205,133 @@ describe("automation output", () => {
       log.mockRestore();
     }
   });
+
+  it("makes --check accept an activated final file when its generated staging file was renamed", async () => {
+    await runCli(tmpDir, { nonInteractive: true });
+    fs.renameSync(path.join(tmpDir, "CLAUDE.generated.md"), path.join(tmpDir, "CLAUDE.md"));
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--check", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(process.exitCode).toBeUndefined();
+      expect(output.missing).toEqual([]);
+      expect(output.outdated).toEqual([]);
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("makes --check fail when an active file is stale even if staging is current", async () => {
+    await runCli(tmpDir, { nonInteractive: true });
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "stale active content");
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--check", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(process.exitCode).toBe(1);
+      expect(output.outdated).toContain("CLAUDE.generated.md");
+      expect(output.fileStates.find((state: { generatedPath: string }) =>
+        state.generatedPath === "CLAUDE.generated.md"
+      )).toEqual(expect.objectContaining({ activeExists: true, effectivePath: "CLAUDE.md", current: false }));
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("checks enriched active files against the recorded accepted output", async () => {
+    const execFn = makeEnrichExecFn();
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+    fs.renameSync(path.join(tmpDir, "CLAUDE.generated.md"), path.join(tmpDir, "CLAUDE.md"));
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--check", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(process.exitCode).toBeUndefined();
+      expect(output.baselineCurrent).toBe(true);
+      expect(output.outdated).toEqual([]);
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("makes --check fail when repository changes invalidate the recorded baseline", async () => {
+    await runCli(tmpDir, { nonInteractive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({ dependencies: { vue: "^3.5.0" }, devDependencies: { vitest: "^2.1.0" } })
+    );
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--check", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(process.exitCode).toBe(1);
+      expect(output.baselineCurrent).toBe(false);
+      expect(output.outdated.length).toBeGreaterThan(0);
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("applies generated files through the CLI and reports backups in JSON", async () => {
+    await runCli(tmpDir, { nonInteractive: true });
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "old active rules");
+    const expected = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf8");
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--apply", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(process.exitCode).toBeUndefined();
+      expect(output.mode).toBe("apply");
+      const applied = output.activationResults.find(
+        (result: { activePath: string }) => result.activePath === "CLAUDE.md"
+      );
+      expect(applied).toEqual(expect.objectContaining({ status: "applied", backupPath: expect.any(String) }));
+      expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.md"), "utf8")).toBe(expected);
+      expect(fs.existsSync(path.join(tmpDir, applied.backupPath))).toBe(true);
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
 });
 
 describe("runCli", () => {
@@ -270,6 +399,18 @@ describe("runCli", () => {
     expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf8")).toBe("manual content");
   });
 
+  it("force refreshes generated files without changing activated final files", async () => {
+    await runCli(tmpDir, { nonInteractive: true });
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "stale staging");
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "manual final");
+
+    const results = await runCli(tmpDir, { nonInteractive: true, force: true });
+
+    expect(results.find((result) => result.path === "CLAUDE.generated.md")?.status).toBe("overwritten");
+    expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf8")).not.toBe("stale staging");
+    expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.md"), "utf8")).toBe("manual final");
+  });
+
   it("does not ask questions or inspect assistants in non-interactive mode", async () => {
     fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ dependencies: {}, devDependencies: {} }));
     const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
@@ -321,7 +462,28 @@ describe("runCli", () => {
 
     const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
     expect(enrichCall?.[0]).toBe("codex");
-    expect(enrichCall?.[1]).toEqual(["exec", "--skip-git-repo-check", "--model", "gpt-5.5", "-"]);
+    expect(enrichCall?.[1]).toEqual([
+      "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral",
+      "--model", "gpt-5.5", "-",
+    ]);
+  });
+
+  it("loads enrichment assistant and model defaults from repository config", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, ".agent-rules-init.yml"),
+      "enrich: true\nassistant: codex\nmodel: gpt-5.5\n"
+    );
+    const execFn = vi.fn().mockImplementation(async (_command: string, args: string[], stdin?: string) => {
+      if (args[0] === "--version") return { stdout: "1.0.0", exitCode: 0 };
+      const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+      return { stdout: JSON.stringify(JSON.parse(filesJson)), exitCode: 0 };
+    });
+
+    await runCli(tmpDir, { execFn, nonInteractive: true });
+
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
+    expect(enrichCall?.[0]).toBe("codex");
+    expect(enrichCall?.[1]).toContain("gpt-5.5");
   });
 
   it("warns and keeps the generated files when the requested assistant is not installed", async () => {
@@ -359,6 +521,8 @@ describe("runCli", () => {
     expect(
       results.find((r) => r.path === ".github/copilot-instructions.generated.md")?.status
     ).toBe("written");
+    expect(results.find((r) => r.path === ".cursor/rules/repository.generated.mdc")?.status).toBe("written");
+    expect(results.find((r) => r.path === "GEMINI.generated.md")?.status).toBe("written");
     expect(
       results.find((r) => r.path === ".claude/commands/js-ts-review.generated.md")?.status
     ).toBe("written");
@@ -390,6 +554,8 @@ describe("runCli", () => {
       "CLAUDE.generated.md",
       "AGENTS.generated.md",
       ".github/copilot-instructions.generated.md",
+      ".cursor/rules/repository.generated.mdc",
+      "GEMINI.generated.md",
     ]);
   });
 

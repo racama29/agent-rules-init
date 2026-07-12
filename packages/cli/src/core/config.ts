@@ -4,7 +4,7 @@ import { parse } from "yaml";
 import type { Lang } from "./i18n.js";
 
 const CONFIG_FILENAMES = [".agent-rules-init.yml", ".agent-rules-init.yaml"] as const;
-const ROOT_KEYS = new Set(["lang", "exclude", "projects", "noAi"]);
+const ROOT_KEYS = new Set(["lang", "exclude", "projects", "noAi", "enrich", "assistant", "model"]);
 const PROJECT_KEYS = ["framework", "testRunner", "linter", "packageManager"] as const;
 const PROJECT_KEY_SET: ReadonlySet<string> = new Set(PROJECT_KEYS);
 
@@ -20,6 +20,9 @@ export interface AgentRulesConfig {
   exclude?: string[];
   projects?: Record<string, ProjectConfig>;
   noAi?: boolean;
+  enrich?: boolean;
+  assistant?: "claude" | "codex";
+  model?: string;
 }
 
 export interface LoadedConfig {
@@ -131,6 +134,19 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
     if (typeof value.noAi === "boolean") config.noAi = value.noAi;
     else warnings.push('Configuration key "noAi" must be a boolean; it was ignored.');
   }
+
+  if (value.enrich !== undefined) {
+    if (typeof value.enrich === "boolean") config.enrich = value.enrich;
+    else warnings.push('Configuration key "enrich" must be a boolean; it was ignored.');
+  }
+
+  if (value.assistant !== undefined) {
+    if (value.assistant === "claude" || value.assistant === "codex") config.assistant = value.assistant;
+    else warnings.push('Configuration key "assistant" must be "claude" or "codex"; it was ignored.');
+  }
+
+  const model = optionalNonEmptyString(value.model, "model", warnings);
+  if (model !== undefined) config.model = model;
 
   return config;
 }

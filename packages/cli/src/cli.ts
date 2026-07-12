@@ -8,6 +8,8 @@ import {
   renderClaudeMd,
   renderAgentsMd,
   renderCopilotInstructions,
+  renderCursorRules,
+  renderGeminiMd,
   renderPromptFiles,
   type RenderEntry,
 } from "./core/templates.js";
@@ -27,11 +29,20 @@ import {
 import {
   detectAvailableAssistants,
   enrichFilesWithAssistant,
+  estimateEnrichment,
   defaultExecFn,
   type AssistantId,
+  type EnrichMetrics,
   type ExecFn,
 } from "./core/llm-bridge.js";
 import type { Pack, RepoFacts } from "./core/types.js";
+import {
+  hashGeneratedFiles,
+  makeGenerationState,
+  writeGenerationState,
+} from "./core/generation-state.js";
+import { evaluateGenerationCheck } from "./core/check-state.js";
+import { applyGeneratedFiles, type ActivationResult } from "./core/activation.js";
 import { jsTsPack } from "./packs/js-ts.js";
 import { pythonPack } from "./packs/python.js";
 import { javaPack } from "./packs/java.js";
@@ -73,6 +84,8 @@ export interface RunCliOptions {
   lang?: Lang;
   /** Generate results without changing the filesystem. */
   dryRun?: boolean;
+  /** Replace only existing *.generated.* staging files. */
+  force?: boolean;
   /** Do not prompt or offer AI enrichment. */
   nonInteractive?: boolean;
   /** Run AI enrichment without asking, even without a TTY. Ignored when skipLlm or noAi apply. */
@@ -83,6 +96,9 @@ export interface RunCliOptions {
   model?: string;
   /** Receives the rendered files before they are written (or planned). */
   onGeneratedFiles?: (files: readonly GeneratedFile[]) => void;
+  /** Receives the deterministic generation fingerprint before optional enrichment. */
+  onBaselineHash?: (hash: string) => void;
+  onEnrichMetrics?: (metrics: EnrichMetrics) => void;
   /** Preloaded repository configuration; loaded from disk when omitted. */
   config?: AgentRulesConfig;
   onConfigWarnings?: (warnings: readonly string[]) => void;
@@ -92,7 +108,13 @@ export interface RunCliOptions {
 
 // Final-name docs the tool itself would generate; when they already exist they carry the
 // team's hand-written intent, so enrichment must integrate them instead of ignoring them.
-const EXISTING_DOC_PATHS = ["CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md"];
+const EXISTING_DOC_PATHS = [
+  "CLAUDE.md",
+  "AGENTS.md",
+  "GEMINI.md",
+  ".github/copilot-instructions.md",
+  ".cursor/rules/repository.mdc",
+];
 const MAX_EXISTING_DOC_CHARS = 20_000;
 
 function readExistingDocs(rootPath: string): GeneratedFile[] {
@@ -142,6 +164,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
       path: ".github/copilot-instructions.generated.md",
       content: renderCopilotInstructions(entries, facts, lang),
     });
+    files.push({
+      path: ".cursor/rules/repository.generated.mdc",
+      content: renderCursorRules(entries, facts, lang),
+    });
+    files.push({ path: "GEMINI.generated.md", content: renderGeminiMd(entries, facts, lang) });
     for (const detection of detections) {
       const pack = ALL_PACKS.find((p) => p.id === detection.packId)!;
       for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx))) {
@@ -157,7 +184,12 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
       {
         path: ".github/copilot-instructions.generated.md",
         content: withFallback(renderCopilotInstructions([], facts, lang)),
-      }
+      },
+      {
+        path: ".cursor/rules/repository.generated.mdc",
+        content: withFallback(renderCursorRules([], facts, lang)),
+      },
+      { path: "GEMINI.generated.md", content: withFallback(renderGeminiMd([], facts, lang)) }
     );
   }
 
@@ -168,14 +200,17 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     if (scoped) files.push(scoped);
   }
 
-  const wantsEnrich = options.enrich === true;
+  const baselineHash = hashGeneratedFiles(files);
+  options.onBaselineHash?.(baselineHash);
+
+  const wantsEnrich = (options.enrich ?? config.enrich) === true;
   const canOfferEnrich = !options.nonInteractive && hasInteractiveTty();
   if (!options.skipLlm && !config.noAi && (wantsEnrich || canOfferEnrich)) {
     // With --enrich there may be no TTY (scripts, CI); route progress through stderr so
     // stdout stays parseable in --json mode.
     const notify = canOfferEnrich ? (message: string) => clack.log.info(message) : (message: string) => console.warn(message);
     const assistants = await detectAvailableAssistants(execFn);
-    const requested = options.assistant;
+    const requested = options.assistant ?? config.assistant;
     if (requested && !assistants.includes(requested)) {
       console.warn(ui.assistantNotAvailable(requested));
     } else if (assistants.length === 0) {
@@ -188,6 +223,8 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
         proceed = (await clack.confirm({ message: ui.enrichConfirm(chosenAssistant) })) === true;
       }
       if (proceed) {
+        const estimate = estimateEnrichment(files);
+        if (estimate.batches > 1) notify(ui.enrichLargeInput(estimate.characters, estimate.batches));
         const spinner = canOfferEnrich ? clack.spinner() : undefined;
         if (spinner) spinner.start(ui.enrichWorking(chosenAssistant));
         else notify(ui.enrichWorking(chosenAssistant));
@@ -197,7 +234,8 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
           cwd: rootPath,
           mustKeep: facts.canonical.map((c) => c.command),
           existingDocs: readExistingDocs(rootPath),
-          model: options.model,
+          model: options.model ?? config.model,
+          onMetrics: options.onEnrichMetrics,
         });
         const changed = enriched.some((file, i) => file.content !== files[i].content);
         const outcome = changed ? ui.enrichDone : ui.enrichKept;
@@ -212,15 +250,25 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   if (options.dryRun) {
     return files.map((file) => ({
       path: file.path,
-      status: fs.existsSync(path.join(rootPath, file.path)) ? "skipped" : "written",
+      status: fs.existsSync(path.join(rootPath, file.path))
+        ? options.force ? "overwritten" : "skipped"
+        : "written",
     }));
   }
-  return writeGeneratedFiles(rootPath, files);
+
+  const results = writeGeneratedFiles(rootPath, files, { force: options.force });
+  const completeRefresh = results.every((result) =>
+    result.status === "written" || result.status === "overwritten"
+  );
+  if (completeRefresh) writeGenerationState(rootPath, makeGenerationState(baselineHash, files));
+  return results;
 }
 
 export interface CliRunOptions {
   lang?: Lang;
   dryRun?: true;
+  force?: true;
+  apply?: true;
   check?: true;
   json?: true;
   nonInteractive?: true;
@@ -260,6 +308,14 @@ export function resolveCliAction(argv: string[]): CliAction {
     }
     if (arg === "--dry-run") {
       options.dryRun = true;
+      continue;
+    }
+    if (arg === "--force") {
+      options.force = true;
+      continue;
+    }
+    if (arg === "--apply") {
+      options.apply = true;
       continue;
     }
     if (arg === "--check") {
@@ -342,12 +398,9 @@ export async function main(): Promise<void> {
 
   const machineOutput = action.json === true;
   const planningOnly = action.dryRun === true || action.check === true;
-  const nonInteractive = action.nonInteractive === true || machineOutput || planningOnly;
+  const nonInteractive = action.nonInteractive === true || machineOutput || planningOnly || action.apply === true;
   // Enrichment output is non-deterministic, so --check (freshness comparison) must stay
   // on the deterministic baseline.
-  const enrich = action.enrich === true && action.check !== true;
-  if (action.enrich === true && action.check === true) console.warn("--enrich is ignored with --check.");
-
   if (!machineOutput) clack.intro("agent-rules-init");
 
   if (!machineOutput && !nonInteractive && !hasInteractiveTty()) {
@@ -356,48 +409,75 @@ export async function main(): Promise<void> {
 
   try {
     const loadedConfig = loadConfig(process.cwd());
+    const apply = action.apply === true && action.check !== true && action.dryRun !== true;
+    const configuredEnrich = (action.enrich ?? loadedConfig.config.enrich) === true;
+    const enrich = configuredEnrich && action.check !== true && !(apply && action.force !== true);
     const lang = action.lang ?? loadedConfig.config.lang ?? defaultLang;
     ui = UI[lang];
+    if (action.enrich === true && action.check === true) console.warn(ui.enrichIgnoredWithCheck);
+    if (action.force === true && action.check === true) console.warn(ui.forceIgnoredWithCheck);
+    if (action.apply === true && !apply) console.warn(ui.applyIgnoredWithPlanning);
     if (!machineOutput) {
       for (const warning of loadedConfig.warnings) console.warn(warning);
     }
     let generatedFiles: readonly GeneratedFile[] = [];
     let repoFacts: RepoFacts | undefined;
+    let baselineHash: string | undefined;
+    let enrichMetrics: EnrichMetrics | undefined;
     const results = await runCli(process.cwd(), {
       lang,
       config: loadedConfig.config,
-      dryRun: planningOnly,
+      dryRun: planningOnly || (apply && action.force !== true),
+      force: action.force === true && action.check !== true,
       nonInteractive,
       skipLlm: nonInteractive && !enrich,
       enrich,
-      assistant: action.assistant,
-      model: action.model,
+      assistant: action.assistant ?? loadedConfig.config.assistant,
+      model: action.model ?? loadedConfig.config.model,
       onGeneratedFiles: (files) => {
         generatedFiles = files;
+      },
+      onBaselineHash: (hash) => {
+        baselineHash = hash;
+      },
+      onEnrichMetrics: (metrics) => {
+        enrichMetrics = metrics;
       },
       onFacts: (facts) => {
         repoFacts = facts;
       },
     });
+    let activationResults: ActivationResult[] = [];
+    if (apply) {
+      if (!baselineHash) throw new Error("generation baseline was not produced");
+      activationResults = applyGeneratedFiles(process.cwd(), generatedFiles, baselineHash);
+    }
     const written = results.filter((r) => r.status === "written");
+    const overwritten = results.filter((r) => r.status === "overwritten");
+    const changed = [...written, ...overwritten];
     const failures = results.filter((r) => r.status === "error");
-    const outdated = action.check
-      ? generatedFiles.filter((file) => {
-          const absolutePath = path.join(process.cwd(), file.path);
-          return fs.existsSync(absolutePath) && fs.readFileSync(absolutePath, "utf8") !== file.content;
-        })
-      : [];
-    const checkIssues = written.length + outdated.length;
+    const check = action.check
+      ? evaluateGenerationCheck(process.cwd(), generatedFiles, baselineHash)
+      : { baselineMatches: undefined, recordedBaselineHash: undefined, fileStates: [], missing: [], outdated: [] };
+    const { fileStates, missing, outdated } = check;
+    const checkIssues = missing.length + outdated.length;
 
     if (machineOutput) {
       const contentByPath = new Map(generatedFiles.map((file) => [file.path, file.content]));
       console.log(
         JSON.stringify({
-          mode: action.check ? "check" : action.dryRun ? "dry-run" : "write",
+          mode: action.check ? "check" : action.dryRun ? "dry-run" : apply ? "apply" : "write",
           configWarnings: loadedConfig.warnings,
           facts: repoFacts,
-          wouldCreate: written.length,
+          wouldCreate: action.check ? missing.length : written.length,
+          missing: missing.map((file) => file.path),
           outdated: outdated.map((file) => file.path),
+          baselineCurrent: check.baselineMatches,
+          baselineHash,
+          recordedBaselineHash: check.recordedBaselineHash,
+          fileStates,
+          activationResults,
+          enrichMetrics,
           results: results.map((result) => ({
             ...result,
             ...(planningOnly ? { content: contentByPath.get(result.path) } : {}),
@@ -407,10 +487,18 @@ export async function main(): Promise<void> {
     } else if (action.dryRun) {
       const statusByPath = new Map(results.map((result) => [result.path, result.status]));
       for (const file of generatedFiles) {
-        console.log(`\n--- ${file.path} (${statusByPath.get(file.path) === "written" ? "would create" : "exists"}) ---\n${file.content}`);
+        const status = statusByPath.get(file.path);
+        const label = ui.dryRunFileLabel(status);
+        console.log(`\n--- ${file.path} (${label}) ---\n${file.content}`);
+      }
+    } else if (apply) {
+      for (const result of activationResults) {
+        if (result.status === "applied") clack.log.success(ui.fileApplied(result.activePath, result.backupPath));
+        else if (result.status === "unchanged") clack.log.info(ui.fileAlreadyApplied(result.activePath));
+        else if (result.status === "error") clack.log.warn(`${result.activePath}: ${result.error}`);
       }
     } else if (!action.check) for (const result of results) {
-      if (result.status === "written") {
+      if (result.status === "written" || result.status === "overwritten") {
         clack.log.success(result.path);
       } else if (result.status === "skipped") {
         clack.log.info(ui.fileSkipped(result.path));
@@ -419,27 +507,31 @@ export async function main(): Promise<void> {
       }
     }
 
+    if (!machineOutput && enrichMetrics) clack.log.info(ui.enrichMetrics(enrichMetrics));
+
     if (!machineOutput && action.check) {
       console.log(
         checkIssues > 0
-          ? `${written.length} file(s) missing; ${outdated.length} file(s) outdated.`
-          : "Generated files are present and up to date."
+          ? ui.checkSummary(missing.length, outdated.length)
+          : ui.checkOk
       );
     } else if (!machineOutput && action.dryRun) {
-      console.log(`\n${written.length} file(s) would be generated.`);
-    } else if (!machineOutput && written.length > 0) {
+      console.log(`\n${ui.dryRunSummary(changed.length)}`);
+    } else if (!machineOutput && apply) {
+      clack.outro(ui.outroApplied);
+    } else if (!machineOutput && changed.length > 0) {
       clack.outro(ui.outroWritten);
     } else if (!machineOutput) {
       clack.outro(ui.outroNothing);
     }
 
-    if (failures.length > 0 || (action.check && checkIssues > 0)) {
+    if (failures.length > 0 || activationResults.some((result) => result.status === "error") || (action.check && checkIssues > 0)) {
       process.exitCode = 1;
     }
   } catch (err) {
     const message = ui.unexpectedError((err as Error).message);
     if (machineOutput) {
-      console.log(JSON.stringify({ mode: action.check ? "check" : action.dryRun ? "dry-run" : "write", error: message }));
+      console.log(JSON.stringify({ mode: action.check ? "check" : action.dryRun ? "dry-run" : action.apply ? "apply" : "write", error: message }));
     } else {
       clack.log.error(message);
     }

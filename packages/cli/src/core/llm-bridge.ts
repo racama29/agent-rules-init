@@ -18,25 +18,46 @@ const VERSION_ARGS: Record<AssistantId, string[]> = {
   codex: ["--version"],
 };
 
-// Non-interactive invocation per assistant. claude reads the prompt from stdin with -p;
-// codex has no -p: its non-interactive mode is `codex exec`, where "-" reads the
-// instructions from stdin. Without --skip-git-repo-check codex refuses to run in
-// directories that aren't a git repo; enrichment is read-only, so skipping is safe
-// (verified against codex-cli 0.130.0). The model string is passed through untouched —
-// the assistant validates it, so new models need no package update.
+// Repository contents are untrusted input. A prompt asking the model to use read tools
+// is not a security boundary, so both assistants are constrained at process level too.
+// Unsupported safety flags fail closed through the deterministic fallback.
 function printArgs(assistant: AssistantId, model?: string): string[] {
   const modelArgs = model ? ["--model", model] : [];
-  if (assistant === "claude") return ["-p", ...modelArgs];
-  return ["exec", "--skip-git-repo-check", ...modelArgs, "-"];
+  if (assistant === "claude") {
+    return [
+      "-p",
+      "--safe-mode",
+      "--no-session-persistence",
+      "--permission-mode",
+      "plan",
+      "--tools",
+      "Read,Glob,Grep",
+      ...modelArgs,
+    ];
+  }
+  return [
+    "exec",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "read-only",
+    "--ephemeral",
+    ...modelArgs,
+    "-",
+  ];
 }
 
 // A hung assistant (expired session, dead network) must not hang the CLI forever;
 // 10 minutes comfortably covers real enrichment runs, and on expiry the rejection
 // lands in the normal fallback path that keeps the deterministic files.
 const EXEC_TIMEOUT_MS = 600_000;
+const SAFE_WINDOWS_SHELL_ARG = /^[A-Za-z0-9._:/@+,-]+$/;
 
 export const defaultExecFn: ExecFn = (command, args, stdin, cwd) =>
   new Promise((resolve, reject) => {
+    if (process.platform === "win32" && args.some((arg) => !SAFE_WINDOWS_SHELL_ARG.test(arg))) {
+      reject(new Error(`refusing an unsafe shell argument for ${command}`));
+      return;
+    }
     // shell:true is only needed on Windows, to resolve npm-installed .cmd/.ps1 shims.
     // cwd matters for enrichment: the assistant explores the repo it runs in with its
     // own read tools, so it must be spawned at the target repo root, not wherever the
@@ -74,7 +95,7 @@ export async function detectAvailableAssistants(execFn: ExecFn = defaultExecFn):
 
 const MAX_BATCH_CHARS = 60_000;
 
-function makeBatches(files: GeneratedFile[]): GeneratedFile[][] {
+function makeBatches(files: readonly GeneratedFile[]): GeneratedFile[][] {
   const batches: GeneratedFile[][] = [];
   let current: GeneratedFile[] = [];
   let currentSize = 2;
@@ -132,6 +153,22 @@ export interface EnrichOptions {
   existingDocs?: readonly GeneratedFile[];
   /** Model identifier forwarded verbatim to the assistant CLI; its default when omitted. */
   model?: string;
+  onMetrics?: (metrics: EnrichMetrics) => void;
+}
+
+export function estimateEnrichment(files: readonly GeneratedFile[]): { characters: number; batches: number } {
+  return { characters: JSON.stringify(files).length, batches: makeBatches(files).length };
+}
+
+export interface EnrichMetrics {
+  assistant: AssistantId;
+  model?: string;
+  batches: number;
+  attempts: number;
+  fallbackBatches: number;
+  inputChars: number;
+  outputChars: number;
+  durationMs: number;
 }
 
 // The assistant is free-form: it may drop the one command CI actually runs and invent a
@@ -150,7 +187,47 @@ function assertMustKeepSurvive(
   }
 }
 
+const DANGEROUS_INSTRUCTION = /(?:rm\s+-rf|git\s+reset\s+--hard|curl[^\n|]*\|\s*(?:sh|bash)|invoke-expression|chmod\s+777|sudo\s+)/i;
+const NEGATED_DANGER = /(?:never|do not|don't|must not|avoid|nunca|no ejecutes|no ejecutar|evita)/i;
+
+function assertNoNewDangerousInstructions(
+  enriched: GeneratedFile[],
+  originals: GeneratedFile[]
+): void {
+  const originalText = originals.map((file) => file.content).join("\n");
+  for (const line of enriched.flatMap((file) => file.content.split("\n"))) {
+    const dangerous = line.match(DANGEROUS_INSTRUCTION)?.[0];
+    if (dangerous && !NEGATED_DANGER.test(line) && !originalText.includes(dangerous)) {
+      throw new Error(`assistant introduced a dangerous instruction: ${dangerous}`);
+    }
+  }
+}
+
+function assertNewBulletClaimsCiteEvidence(
+  enriched: GeneratedFile[],
+  originals: GeneratedFile[]
+): void {
+  for (let index = 0; index < enriched.length; index++) {
+    const originalLines = new Set(originals[index].content.split("\n").map((line) => line.trim()));
+    for (const line of enriched[index].content.split("\n")) {
+      const trimmed = line.trim();
+      if (/^[-*] /.test(trimmed) && !originalLines.has(trimmed) && !HAS_EVIDENCE_GROUP.test(trimmed)) {
+        throw new Error("assistant introduced a bullet claim without cited evidence");
+      }
+    }
+  }
+}
+
+function assistantFailureDetail(assistant: AssistantId, error: unknown): string {
+  const message = (error as Error).message;
+  if (/unknown (?:option|argument)|unrecognized (?:option|argument)|unexpected argument/i.test(message)) {
+    return `${assistant} does not support the required read-only safety flags; update the assistant CLI`;
+  }
+  return message;
+}
+
 const EVIDENCE_GROUP = /\((?:evidencia|evidence):([^)]*)\)/gi;
+const HAS_EVIDENCE_GROUP = /\((?:evidencia|evidence):[^)]*\)/i;
 // A checkable citation is a plain relative path; tokens with spaces, URLs or globs are
 // left alone rather than guessed at.
 const PATH_TOKEN = /^[\w.@~-]+(?:[\\/][\w.@~-]+)*[\\/]?$/;
@@ -198,20 +275,31 @@ export async function enrichFilesWithAssistant(
   files: GeneratedFile[],
   options: EnrichOptions = {}
 ): Promise<GeneratedFile[]> {
-  const { execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], existingDocs = [], model } = options;
+  const { execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], existingDocs = [], model, onMetrics } = options;
   const existingDocsJson = existingDocs.length > 0 ? JSON.stringify(existingDocs) : undefined;
   const enriched: GeneratedFile[] = [];
-  for (const batch of makeBatches(files)) {
+  const batches = makeBatches(files);
+  const startedAt = Date.now();
+  let attempts = 0;
+  let fallbackBatches = 0;
+  let inputChars = 0;
+  let outputChars = 0;
+  for (const batch of batches) {
     const input = UI[lang].enrichPrompt(JSON.stringify(batch), mustKeep, existingDocsJson);
     // Contract violations (invalid JSON, changed paths, dropped commands) are stochastic,
     // especially with smaller models; one bounded retry recovers most of them.
     let attemptsLeft = 2;
     while (attemptsLeft > 0) {
       attemptsLeft--;
+      attempts++;
+      inputChars += input.length;
       try {
         const result = await execFn(assistant, printArgs(assistant, model), input, cwd);
+        outputChars += result.stdout.length;
         let parsed = parseAssistantBatch(result.stdout, batch);
         assertMustKeepSurvive(parsed, batch, mustKeep);
+        assertNoNewDangerousInstructions(parsed, batch);
+        assertNewBulletClaimsCiteEvidence(parsed, batch);
         if (cwd) {
           const verified = dropUnverifiableClaims(parsed, cwd);
           if (verified.missing.length > 0) console.warn(UI[lang].enrichEvidenceDropped(verified.missing));
@@ -223,11 +311,22 @@ export async function enrichFilesWithAssistant(
         if (attemptsLeft > 0) {
           console.warn(UI[lang].enrichRetrying(assistant));
         } else {
-          console.warn(UI[lang].enrichFailed(assistant, (err as Error).message));
+          console.warn(UI[lang].enrichFailed(assistant, assistantFailureDetail(assistant, err)));
+          fallbackBatches++;
           enriched.push(...batch);
         }
       }
     }
   }
+  onMetrics?.({
+    assistant,
+    model,
+    batches: batches.length,
+    attempts,
+    fallbackBatches,
+    inputChars,
+    outputChars,
+    durationMs: Date.now() - startedAt,
+  });
   return enriched;
 }

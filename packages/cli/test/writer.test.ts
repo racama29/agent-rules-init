@@ -45,4 +45,38 @@ describe("writeGeneratedFiles", () => {
     expect(results[1].status).toBe("written");
     expect(fs.readFileSync(path.join(tmpDir, "AGENTS.generated.md"), "utf-8")).toBe("agents content");
   });
+
+  it("force replaces generated staging files but never final files", () => {
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "old staging content");
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "hand-maintained final content");
+
+    const results = writeGeneratedFiles(
+      tmpDir,
+      [{ path: "CLAUDE.generated.md", content: "new staging content" }],
+      { force: true }
+    );
+
+    expect(results[0].status).toBe("overwritten");
+    expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf8")).toBe("new staging content");
+    expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.md"), "utf8")).toBe("hand-maintained final content");
+  });
+
+  it("refuses force for paths that are not marked as generated", () => {
+    fs.writeFileSync(path.join(tmpDir, "CLAUDE.md"), "manual");
+    const results = writeGeneratedFiles(
+      tmpDir,
+      [{ path: "CLAUDE.md", content: "replacement" }],
+      { force: true }
+    );
+    expect(results[0].status).toBe("error");
+    expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.md"), "utf8")).toBe("manual");
+  });
+
+  it("refuses generated paths that escape the repository root", () => {
+    const outsideName = `escape-${path.basename(tmpDir)}.generated.md`;
+    const outsidePath = path.join(tmpDir, "..", outsideName);
+    const results = writeGeneratedFiles(tmpDir, [{ path: `../${outsideName}`, content: "escape" }]);
+    expect(results[0].status).toBe("error");
+    expect(fs.existsSync(outsidePath)).toBe(false);
+  });
 });

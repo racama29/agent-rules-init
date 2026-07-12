@@ -14,6 +14,7 @@ const IGNORED_DIRS = new Set([
   ".venv", "venv", ".tox", "__pycache__",
   ".next", ".nuxt", ".svelte-kit", ".turbo", ".cache",
   ".gradle", ".dart_tool",
+  ".agent-rules-init",
 ]);
 const MAX_DEPTH = 4;
 

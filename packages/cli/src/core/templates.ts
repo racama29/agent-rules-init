@@ -150,6 +150,22 @@ export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFac
   return blocks.join("\n");
 }
 
+export function renderCursorRules(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  const body = renderAgentsMd(entries, facts, lang).replace("# AGENTS.md", "# Repository rules");
+  return [
+    "---",
+    "description: Repository-specific conventions and validation commands",
+    "alwaysApply: true",
+    "---",
+    "",
+    body,
+  ].join("\n");
+}
+
+export function renderGeminiMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+  return renderAgentsMd(entries, facts, lang).replace("# AGENTS.md", "# GEMINI.md");
+}
+
 export function renderPromptFiles(
   packId: string,
   templates: PromptTemplate[]
