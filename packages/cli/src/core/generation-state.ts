@@ -5,10 +5,17 @@ import { writeGeneratedFiles, type GeneratedFile } from "./writer.js";
 
 export const GENERATION_STATE_PATH = ".agent-rules-init.generated.json";
 
+export interface EnrichmentState {
+  cacheKey: string;
+  assistant: "claude" | "codex";
+  model?: string;
+}
+
 export interface GenerationState {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   baselineHash: string;
   outputHashes: Record<string, string>;
+  enrichment?: EnrichmentState;
 }
 
 export function hashContent(content: string): string {
@@ -23,12 +30,14 @@ export function hashGeneratedFiles(files: readonly GeneratedFile[]): string {
 
 export function makeGenerationState(
   baselineHash: string,
-  files: readonly GeneratedFile[]
+  files: readonly GeneratedFile[],
+  enrichment?: EnrichmentState
 ): GenerationState {
   return {
-    schemaVersion: 1,
+    schemaVersion: enrichment ? 2 : 1,
     baselineHash,
     outputHashes: Object.fromEntries(files.map((file) => [file.path, hashContent(file.content)])),
+    ...(enrichment ? { enrichment } : {}),
   };
 }
 
@@ -46,9 +55,16 @@ export function loadGenerationState(rootPath: string): GenerationState | undefin
   if (!fs.existsSync(statePath)) return undefined;
   try {
     const value = JSON.parse(fs.readFileSync(statePath, "utf8")) as Partial<GenerationState>;
-    if (value.schemaVersion !== 1 || typeof value.baselineHash !== "string") return undefined;
+    if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return undefined;
+    if (typeof value.baselineHash !== "string") return undefined;
     if (!value.outputHashes || typeof value.outputHashes !== "object") return undefined;
     if (Object.values(value.outputHashes).some((hash) => typeof hash !== "string")) return undefined;
+    if (value.enrichment !== undefined) {
+      const enrichment = value.enrichment as Partial<EnrichmentState>;
+      if (typeof enrichment.cacheKey !== "string") return undefined;
+      if (enrichment.assistant !== "claude" && enrichment.assistant !== "codex") return undefined;
+      if (enrichment.model !== undefined && typeof enrichment.model !== "string") return undefined;
+    }
     return value as GenerationState;
   } catch {
     return undefined;

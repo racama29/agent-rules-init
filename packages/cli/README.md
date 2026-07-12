@@ -20,7 +20,9 @@ Complete generations store a git-ignored hash receipt so `--check` can verify de
 
 AI enrichment runs assistants with read-only restrictions and falls back to deterministic output when invocation or validation fails. Review generated files before activation, especially when the repository did not come from a trusted source.
 
-Enrichment also reports batch, retry, input-size, fallback and duration metrics.
+Verified enrichment is reused when repository inputs, assistant/model and accepted staging hashes are unchanged. Use `--no-enrich-cache` for a deliberate fresh run, and bound latency with `--enrich-timeout <seconds>` plus `--enrich-retries <0..2>`.
+
+Semantic validation rejects prompt-injection language, new sections, destructive instructions, commands absent from repository facts and evidence paths outside the repository. Metrics report cache hits, changed lines and security rejections in addition to batch, retry, input-size, fallback and duration data.
 
 Generated documents share an evidence-backed model but are not duplicates: Claude receives broad repository context, AGENTS receives operational commands and scope, and Copilot receives concise implementation conventions. Observed architecture and local conventions include their source files so specific claims can be audited.
 

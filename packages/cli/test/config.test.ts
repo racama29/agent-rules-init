@@ -35,6 +35,9 @@ noAi: true
 enrich: true
 assistant: codex
 model: gpt-5.5
+enrichCache: false
+enrichTimeoutSeconds: 90
+enrichRetries: 0
 projects:
   apps/web:
     framework: react
@@ -53,6 +56,9 @@ projects:
         enrich: true,
         assistant: "codex",
         model: "gpt-5.5",
+        enrichCache: false,
+        enrichTimeoutSeconds: 90,
+        enrichRetries: 0,
         projects: {
           "apps/web": {
             framework: "react",
@@ -87,6 +93,9 @@ noAi: yes
 enrich: yes
 assistant: cursor
 model: ""
+enrichCache: yes
+enrichTimeoutSeconds: 5
+enrichRetries: 3
 typo: true
 projects:
   apps/web:
@@ -106,6 +115,9 @@ projects:
         expect.stringContaining('"enrich"'),
         expect.stringContaining('"assistant"'),
         expect.stringContaining('"model"'),
+        expect.stringContaining('"enrichCache"'),
+        expect.stringContaining('"enrichTimeoutSeconds"'),
+        expect.stringContaining('"enrichRetries"'),
         expect.stringContaining('"typo"'),
         expect.stringContaining('"projects.apps/web.framework"'),
         expect.stringContaining('"projects.apps/web.extra"'),

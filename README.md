@@ -47,7 +47,7 @@ The general documents are tailored to their consumer: `CLAUDE.md` keeps reposito
 
 If something cannot be inferred with confidence (e.g. the framework), the CLI asks you one targeted question before generating the files.
 
-**Last step, manual on purpose:** review the generated content and, once you are happy with it, drop the `.generated` suffix (`CLAUDE.generated.md` → `CLAUDE.md`, etc.) — AI assistants only read the final name. This is intentional: nothing you hand-tuned ever gets silently overwritten.
+**Last step, manual on purpose:** review the generated content and run `npx agent-rules-init --apply`. It activates the reviewed staging files and backs up replaced final files; nothing you hand-tuned is silently lost.
 
 ## AI enrichment
 
@@ -58,10 +58,11 @@ Enrichment is constrained to read-only operation: Codex runs in its read-only sa
 - **Interactive runs** offer it with an explicit question — never automatic, and it may take a few minutes.
 - **`--enrich`** forces it without asking, also without a TTY, so scripts and onboarding docs can rely on it (`--check` ignores it: freshness comparison needs the deterministic baseline).
 - **You control the spend**: `--assistant claude|codex` picks which installed assistant to use, and `--model <id>` is forwarded verbatim to it (e.g. `--model haiku` for a cheaper run) — no model list is hardcoded, so new models work without updating this package. Without these flags it uses the first assistant found and that assistant's own default model.
-- **Existing `CLAUDE.md`, `AGENTS.md` or copilot instructions are respected**: they are handed to the assistant as the team's intent, to integrate — not contradict — in the enriched output.
-- **Guardrails**: the output is validated (same files, same order, valid JSON) and every canonical command must survive verbatim; any batch that fails validation falls back to the deterministic version. Cited evidence is checked too: claims citing files that don't exist in the repo are dropped and reported.
-- **Semantic safety**: newly introduced destructive instructions such as `rm -rf`, `git reset --hard` or download-and-pipe-to-shell commands invalidate the batch.
-- **Cost visibility**: terminal and JSON output report batches, attempts, characters sent, fallbacks and elapsed time; multi-process enrichment warns before starting.
+- **Existing `CLAUDE.md`, `AGENTS.md` or copilot instructions are useful context, but remain untrusted data**: meta-instructions inside them are never authority over the enrichment contract.
+- **Guardrails**: the output is validated (same files/order/headings, valid JSON), verified commands must survive verbatim, and new bullet claims need cited evidence. Evidence paths must resolve to regular files inside the repository.
+- **Semantic safety**: destructive instructions, prompt-injection language, new Markdown sections and commands not extracted from repository manifests/CI invalidate the batch.
+- **Latency control**: successful enrichment is cached using the deterministic baseline, assistant/model, a bounded repository content fingerprint and hashes of every accepted staging file. Any repository edit or staging tamper invalidates it. `--no-enrich-cache` forces a fresh run.
+- **Budget control**: `--enrich-timeout <seconds>` and `--enrich-retries <0..2>` bound the worst-case wait. Terminal/JSON metrics report cache hits, changed lines and security rejections as well as batches, characters, fallbacks and elapsed time.
 
 ## Options
 
@@ -69,6 +70,8 @@ Enrichment is constrained to read-only operation: Codex runs in its read-only sa
 npx agent-rules-init             # scan the current directory
 npx agent-rules-init --enrich    # additionally, let your installed claude/codex analyze the code and enrich the output
 npx agent-rules-init --enrich --assistant codex --model gpt-5.5  # choose the assistant and model (token spend is yours)
+npx agent-rules-init --enrich --enrich-timeout 60 --enrich-retries 0  # fast, single-attempt budget
+npx agent-rules-init --enrich --no-enrich-cache # deliberately bypass verified cached output
 npx agent-rules-init --lang en   # force the content language (es|en); defaults to your system locale
 npx agent-rules-init --help      # show help
 npx agent-rules-init --version   # show the version
@@ -89,6 +92,9 @@ lang: en
 enrich: true
 assistant: codex
 model: gpt-5.5
+enrichCache: true
+enrichTimeoutSeconds: 300
+enrichRetries: 1
 exclude:
   - legacy/**
 projects:
@@ -100,7 +106,7 @@ projects:
 
 Project overrides are applied to the package-scoped `AGENTS.generated.md`. Excluded JS/TS packages do not contribute dependencies, commands or scoped output.
 
-`enrich`, `assistant` and `model` make repeated team invocations reproducible. Explicit CLI flags take precedence. `noAi: true` disables enrichment regardless of those settings.
+The enrichment cache is enabled by default. `enrich`, `assistant`, `model`, `enrichCache`, `enrichTimeoutSeconds` and `enrichRetries` make repeated team invocations reproducible. Explicit CLI flags take precedence. `noAi: true` disables enrichment regardless of those settings.
 
 ## Before and after
 

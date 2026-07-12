@@ -26,7 +26,9 @@ import {
   detectAvailableAssistants,
   enrichFilesWithAssistant,
   estimateEnrichment,
-  defaultExecFn,
+  createDefaultExecFn,
+  DEFAULT_EXEC_TIMEOUT_MS,
+  summarizeEnrichmentChanges,
   type AssistantId,
   type EnrichMetrics,
   type ExecFn,
@@ -36,7 +38,9 @@ import {
   hashGeneratedFiles,
   makeGenerationState,
   writeGenerationState,
+  type EnrichmentState,
 } from "./core/generation-state.js";
+import { loadCachedEnrichment, makeEnrichmentState } from "./core/enrichment-cache.js";
 import { evaluateGenerationCheck } from "./core/check-state.js";
 import { applyGeneratedFiles, type ActivationResult } from "./core/activation.js";
 import { jsTsPack } from "./packs/js-ts.js";
@@ -91,6 +95,12 @@ export interface RunCliOptions {
   assistant?: AssistantId;
   /** Model forwarded verbatim to the assistant CLI; its default when omitted. */
   model?: string;
+  /** Per-assistant-attempt timeout in seconds. */
+  enrichTimeoutSeconds?: number;
+  /** Disable reuse of verified enriched staging for this invocation. */
+  noEnrichCache?: boolean;
+  /** Number of retries after the first assistant attempt (0..2). */
+  enrichRetries?: number;
   /** Receives the rendered files before they are written (or planned). */
   onGeneratedFiles?: (files: readonly GeneratedFile[]) => void;
   /** Receives the deterministic generation fingerprint before optional enrichment. */
@@ -119,6 +129,8 @@ function readExistingDocs(rootPath: string): GeneratedFile[] {
   for (const relativePath of EXISTING_DOC_PATHS) {
     const absolutePath = path.join(rootPath, relativePath);
     if (!fs.existsSync(absolutePath)) continue;
+    const stat = fs.lstatSync(absolutePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) continue;
     const content = fs.readFileSync(absolutePath, "utf8");
     if (content.trim() === "") continue;
     docs.push({ path: relativePath, content: content.slice(0, MAX_EXISTING_DOC_CHARS) });
@@ -130,7 +142,8 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const loadedConfig = options.config ? { config: options.config, warnings: [] } : loadConfig(rootPath);
   const config = loadedConfig.config;
   options.onConfigWarnings?.(loadedConfig.warnings);
-  const execFn = options.execFn ?? defaultExecFn;
+  const timeoutSeconds = options.enrichTimeoutSeconds ?? config.enrichTimeoutSeconds ?? DEFAULT_EXEC_TIMEOUT_MS / 1000;
+  const execFn = options.execFn ?? createDefaultExecFn(timeoutSeconds * 1000);
   const lang = options.lang ?? config.lang ?? detectLang();
   const ui = UI[lang];
 
@@ -200,6 +213,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
 
   const baselineHash = hashGeneratedFiles(files);
   options.onBaselineHash?.(baselineHash);
+  let acceptedEnrichmentState: EnrichmentState | undefined;
 
   const wantsEnrich = (options.enrich ?? config.enrich) === true;
   const canOfferEnrich = !options.nonInteractive && hasInteractiveTty();
@@ -221,25 +235,72 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
         proceed = (await clack.confirm({ message: ui.enrichConfirm(chosenAssistant) })) === true;
       }
       if (proceed) {
-        const estimate = estimateEnrichment(files);
-        if (estimate.batches > 1) notify(ui.enrichLargeInput(estimate.characters, estimate.batches));
-        const spinner = canOfferEnrich ? clack.spinner() : undefined;
-        if (spinner) spinner.start(ui.enrichWorking(chosenAssistant));
-        else notify(ui.enrichWorking(chosenAssistant));
-        const enriched = await enrichFilesWithAssistant(chosenAssistant, files, {
-          execFn,
-          lang,
-          cwd: rootPath,
-          mustKeep: facts.canonical.map((c) => c.command),
-          existingDocs: readExistingDocs(rootPath),
-          model: options.model ?? config.model,
-          onMetrics: options.onEnrichMetrics,
-        });
-        const changed = enriched.some((file, i) => file.content !== files[i].content);
-        const outcome = changed ? ui.enrichDone : ui.enrichKept;
-        if (spinner) spinner.stop(outcome);
-        else notify(outcome);
-        files.splice(0, files.length, ...enriched);
+        const existingDocs = readExistingDocs(rootPath);
+        const model = options.model ?? config.model;
+        const requestedState = makeEnrichmentState(
+          rootPath, signals.files, baselineHash, existingDocs, chosenAssistant, model
+        );
+        const useCache = options.noEnrichCache !== true && config.enrichCache !== false;
+        const cached = useCache
+          ? loadCachedEnrichment(rootPath, baselineHash, files, requestedState)
+          : undefined;
+        if (cached) {
+          const changes = summarizeEnrichmentChanges(files, cached);
+          options.onEnrichMetrics?.({
+            assistant: chosenAssistant,
+            model,
+            batches: 0,
+            attempts: 0,
+            fallbackBatches: 0,
+            inputChars: 0,
+            outputChars: cached.reduce((sum, file) => sum + file.content.length, 0),
+            durationMs: 0,
+            cacheHit: true,
+            ...changes,
+            securityRejections: 0,
+          });
+          acceptedEnrichmentState = requestedState;
+          files.splice(0, files.length, ...cached);
+          notify(ui.enrichCacheHit);
+        } else {
+          const estimate = estimateEnrichment(files);
+          if (estimate.batches > 1) notify(ui.enrichLargeInput(estimate.characters, estimate.batches));
+          const spinner = canOfferEnrich ? clack.spinner() : undefined;
+          const retries = options.enrichRetries ?? config.enrichRetries ?? 1;
+          notify(ui.enrichBudget(timeoutSeconds, retries + 1));
+          if (spinner) spinner.start(ui.enrichWorking(chosenAssistant));
+          else notify(ui.enrichWorking(chosenAssistant));
+          let runMetrics: EnrichMetrics | undefined;
+          const verifiedCommands = [...new Set([
+            ...facts.canonical.map((entry) => entry.command),
+            ...facts.commands.map((entry) => entry.invocation),
+            ...facts.ciCommands.map((entry) => entry.command),
+          ])];
+          const enriched = await enrichFilesWithAssistant(chosenAssistant, files, {
+            execFn,
+            lang,
+            cwd: rootPath,
+            mustKeep: verifiedCommands,
+            existingDocs,
+            model,
+            maxAttempts: retries + 1,
+            onMetrics: (metrics) => {
+              runMetrics = metrics;
+              options.onEnrichMetrics?.(metrics);
+            },
+          });
+          const changed = enriched.some((file, i) => file.content !== files[i].content);
+          const outcome = changed ? ui.enrichDone : ui.enrichKept;
+          if (spinner) spinner.stop(outcome);
+          else notify(outcome);
+          files.splice(0, files.length, ...enriched);
+          if (changed && runMetrics && runMetrics.fallbackBatches === 0) {
+            acceptedEnrichmentState = requestedState;
+          } else if (!changed) {
+            // Never cache a deterministic fallback as a successful enrichment.
+            acceptedEnrichmentState = undefined;
+          }
+        }
       }
     }
   }
@@ -258,7 +319,9 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const completeRefresh = results.every((result) =>
     result.status === "written" || result.status === "overwritten"
   );
-  if (completeRefresh) writeGenerationState(rootPath, makeGenerationState(baselineHash, files));
+  if (completeRefresh) {
+    writeGenerationState(rootPath, makeGenerationState(baselineHash, files, acceptedEnrichmentState));
+  }
   return results;
 }
 
@@ -273,6 +336,9 @@ export interface CliRunOptions {
   enrich?: true;
   assistant?: AssistantId;
   model?: string;
+  enrichTimeoutSeconds?: number;
+  noEnrichCache?: true;
+  enrichRetries?: number;
 }
 
 export type CliAction =
@@ -281,6 +347,8 @@ export type CliAction =
   | { kind: "version" }
   | { kind: "invalid-lang"; value: string }
   | { kind: "invalid-assistant"; value: string }
+  | { kind: "invalid-timeout"; value: string }
+  | { kind: "invalid-retries"; value: string }
   | { kind: "missing-value"; flag: string }
   | { kind: "unknown"; flag: string };
 
@@ -344,6 +412,32 @@ export function resolveCliAction(argv: string[]): CliAction {
       options.model = value;
       continue;
     }
+    if (arg === "--enrich-timeout" || arg.startsWith("--enrich-timeout=")) {
+      const value = arg.startsWith("--enrich-timeout=")
+        ? arg.slice("--enrich-timeout=".length)
+        : argv[++i] ?? "";
+      const timeout = Number(value);
+      if (!Number.isInteger(timeout) || timeout < 10 || timeout > 3600) {
+        return { kind: "invalid-timeout", value };
+      }
+      options.enrichTimeoutSeconds = timeout;
+      continue;
+    }
+    if (arg === "--no-enrich-cache") {
+      options.noEnrichCache = true;
+      continue;
+    }
+    if (arg === "--enrich-retries" || arg.startsWith("--enrich-retries=")) {
+      const value = arg.startsWith("--enrich-retries=")
+        ? arg.slice("--enrich-retries=".length)
+        : argv[++i] ?? "";
+      const retries = Number(value);
+      if (!Number.isInteger(retries) || retries < 0 || retries > 2) {
+        return { kind: "invalid-retries", value };
+      }
+      options.enrichRetries = retries;
+      continue;
+    }
     return { kind: "unknown", flag: arg };
   }
   return { kind: "run", ...options };
@@ -385,6 +479,16 @@ export async function main(): Promise<void> {
   }
   if (action.kind === "invalid-assistant") {
     console.error(`${ui.invalidAssistant(action.value)}\n\n${usageWithAutomationOptions(ui)}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (action.kind === "invalid-timeout") {
+    console.error(`${ui.invalidTimeout(action.value)}\n\n${usageWithAutomationOptions(ui)}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (action.kind === "invalid-retries") {
+    console.error(`${ui.invalidRetries(action.value)}\n\n${usageWithAutomationOptions(ui)}`);
     process.exitCode = 1;
     return;
   }
@@ -432,6 +536,9 @@ export async function main(): Promise<void> {
       enrich,
       assistant: action.assistant ?? loadedConfig.config.assistant,
       model: action.model ?? loadedConfig.config.model,
+      enrichTimeoutSeconds: action.enrichTimeoutSeconds ?? loadedConfig.config.enrichTimeoutSeconds,
+      noEnrichCache: action.noEnrichCache === true,
+      enrichRetries: action.enrichRetries ?? loadedConfig.config.enrichRetries,
       onGeneratedFiles: (files) => {
         generatedFiles = files;
       },

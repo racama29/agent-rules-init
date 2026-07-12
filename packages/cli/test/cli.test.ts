@@ -27,6 +27,14 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+function promptFilesJson(stdin: string): string {
+  const filesJson = stdin.match(
+    /<(?:datos_no_confiables_entrada_json|untrusted_input_json)>\n([\s\S]*?)\n<\//
+  )?.[1];
+  if (!filesJson) throw new Error("input JSON boundary not found");
+  return filesJson;
+}
+
 /** Simula un `claude` instalado que devuelve cada archivo con el contenido enriquecido. */
 function makeEnrichExecFn() {
   return vi.fn().mockImplementation(async (command: string, args: string[], stdin?: string) => {
@@ -34,7 +42,7 @@ function makeEnrichExecFn() {
       if (command === "claude") return { stdout: "1.0.0", exitCode: 0 };
       throw new Error("command not found");
     }
-    const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+    const filesJson = promptFilesJson(stdin!);
     const files = JSON.parse(filesJson) as { path: string; content: string }[];
     return {
       stdout: JSON.stringify(files.map((file) => ({ ...file, content: `ENRIQUECIDO\n${file.content}` }))),
@@ -204,6 +212,19 @@ describe("automation output", () => {
       cwd.mockRestore();
       log.mockRestore();
     }
+  });
+
+  it("parses enrichment latency and cache controls", () => {
+    expect(resolveCliAction([
+      "--enrich-timeout=60", "--enrich-retries", "0", "--no-enrich-cache",
+    ])).toEqual({
+      kind: "run",
+      enrichTimeoutSeconds: 60,
+      enrichRetries: 0,
+      noEnrichCache: true,
+    });
+    expect(resolveCliAction(["--enrich-timeout", "5"])).toEqual({ kind: "invalid-timeout", value: "5" });
+    expect(resolveCliAction(["--enrich-retries", "3"])).toEqual({ kind: "invalid-retries", value: "3" });
   });
 
   it("makes --check accept an activated final file when its generated staging file was renamed", async () => {
@@ -453,7 +474,7 @@ describe("runCli", () => {
   it("honors the requested assistant instead of the first detected one", async () => {
     const execFn = vi.fn().mockImplementation(async (command: string, args: string[], stdin?: string) => {
       if (args[0] === "--version") return { stdout: "1.0.0", exitCode: 0 };
-      const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+      const filesJson = promptFilesJson(stdin!);
       const files = JSON.parse(filesJson) as { path: string; content: string }[];
       return { stdout: JSON.stringify(files), exitCode: 0 };
     });
@@ -468,6 +489,44 @@ describe("runCli", () => {
     ]);
   });
 
+  it("reuses verified enrichment without launching the assistant when inputs are unchanged", async () => {
+    const execFn = makeEnrichExecFn();
+    const metrics: Array<{ cacheHit: boolean }> = [];
+    await runCli(tmpDir, {
+      execFn, nonInteractive: true, enrich: true,
+      onEnrichMetrics: (value) => metrics.push(value),
+    });
+    const callsAfterFirstRun = execFn.mock.calls.filter((call) => call[1][0] !== "--version").length;
+
+    await runCli(tmpDir, {
+      execFn, nonInteractive: true, enrich: true, force: true,
+      onEnrichMetrics: (value) => metrics.push(value),
+    });
+
+    expect(execFn.mock.calls.filter((call) => call[1][0] !== "--version")).toHaveLength(callsAfterFirstRun);
+    expect(metrics.map((value) => value.cacheHit)).toEqual([false, true]);
+
+    await runCli(tmpDir, {
+      execFn, nonInteractive: true, enrich: true, force: true, noEnrichCache: true,
+    });
+    expect(execFn.mock.calls.filter((call) => call[1][0] !== "--version")).toHaveLength(callsAfterFirstRun + 1);
+  });
+
+  it("invalidates enrichment cache after a repository edit or staging tamper", async () => {
+    const execFn = makeEnrichExecFn();
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+    const enrichmentCalls = () => execFn.mock.calls.filter((call) => call[1][0] !== "--version").length;
+    expect(enrichmentCalls()).toBe(1);
+
+    fs.writeFileSync(path.join(tmpDir, "source.ts"), "export const changed = true;\n");
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true, force: true });
+    expect(enrichmentCalls()).toBe(2);
+
+    fs.appendFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "\ntampered\n");
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true, force: true });
+    expect(enrichmentCalls()).toBe(3);
+  });
+
   it("loads enrichment assistant and model defaults from repository config", async () => {
     fs.writeFileSync(
       path.join(tmpDir, ".agent-rules-init.yml"),
@@ -475,7 +534,7 @@ describe("runCli", () => {
     );
     const execFn = vi.fn().mockImplementation(async (_command: string, args: string[], stdin?: string) => {
       if (args[0] === "--version") return { stdout: "1.0.0", exitCode: 0 };
-      const filesJson = stdin!.split(/(?:Entrada|Input) JSON:\n/)[1];
+      const filesJson = promptFilesJson(stdin!);
       return { stdout: JSON.stringify(JSON.parse(filesJson)), exitCode: 0 };
     });
 

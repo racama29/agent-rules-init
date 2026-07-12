@@ -46,13 +46,15 @@ function printArgs(assistant: AssistantId, model?: string): string[] {
   ];
 }
 
-// A hung assistant (expired session, dead network) must not hang the CLI forever;
-// 10 minutes comfortably covers real enrichment runs, and on expiry the rejection
-// lands in the normal fallback path that keeps the deterministic files.
-const EXEC_TIMEOUT_MS = 600_000;
+// A hung assistant (expired session, dead network) must not hang the CLI forever.
+// Five minutes covers the verified real runs while still placing a useful upper bound;
+// callers can lower or raise it explicitly.
+export const DEFAULT_EXEC_TIMEOUT_MS = 300_000;
+const MAX_ASSISTANT_OUTPUT_CHARS = 2_000_000;
 const SAFE_WINDOWS_SHELL_ARG = /^[A-Za-z0-9._:/@+,-]+$/;
 
-export const defaultExecFn: ExecFn = (command, args, stdin, cwd) =>
+export function createDefaultExecFn(timeoutMs = DEFAULT_EXEC_TIMEOUT_MS): ExecFn {
+  return (command, args, stdin, cwd) =>
   new Promise((resolve, reject) => {
     if (process.platform === "win32" && args.some((arg) => !SAFE_WINDOWS_SHELL_ARG.test(arg))) {
       reject(new Error(`refusing an unsafe shell argument for ${command}`));
@@ -62,13 +64,21 @@ export const defaultExecFn: ExecFn = (command, args, stdin, cwd) =>
     // cwd matters for enrichment: the assistant explores the repo it runs in with its
     // own read tools, so it must be spawned at the target repo root, not wherever the
     // CLI process happens to live.
-    const child = spawn(command, args, { shell: process.platform === "win32", cwd, timeout: EXEC_TIMEOUT_MS });
+    const child = spawn(command, args, { shell: process.platform === "win32", cwd, timeout: timeoutMs });
     let stdout = "";
-    child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
+    let outputLimitExceeded = false;
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+      if (stdout.length > MAX_ASSISTANT_OUTPUT_CHARS) {
+        outputLimitExceeded = true;
+        child.kill();
+      }
+    });
     child.on("error", reject);
     child.on("close", (exitCode) => {
-      if (exitCode === 0) resolve({ stdout, exitCode });
-      else if (child.killed) reject(new Error(`${command} timed out after ${EXEC_TIMEOUT_MS / 1000}s`));
+      if (outputLimitExceeded) reject(new Error(`${command} exceeded the assistant output limit`));
+      else if (exitCode === 0) resolve({ stdout, exitCode });
+      else if (child.killed) reject(new Error(`${command} timed out after ${timeoutMs / 1000}s`));
       else reject(new Error(`${command} exited with code ${exitCode}`));
     });
     // Content always goes through stdin, never as a CLI argument: on Windows, spawn's
@@ -77,6 +87,9 @@ export const defaultExecFn: ExecFn = (command, args, stdin, cwd) =>
     // via stdin has no such limit and needs no shell-quoting at all.
     child.stdin?.end(stdin ?? "");
   });
+}
+
+export const defaultExecFn: ExecFn = createDefaultExecFn();
 
 export async function detectAvailableAssistants(execFn: ExecFn = defaultExecFn): Promise<AssistantId[]> {
   const candidates: AssistantId[] = ["claude", "codex"];
@@ -153,6 +166,8 @@ export interface EnrichOptions {
   existingDocs?: readonly GeneratedFile[];
   /** Model identifier forwarded verbatim to the assistant CLI; its default when omitted. */
   model?: string;
+  /** Total attempts per batch, from 1 to 3. */
+  maxAttempts?: number;
   onMetrics?: (metrics: EnrichMetrics) => void;
 }
 
@@ -169,6 +184,40 @@ export interface EnrichMetrics {
   inputChars: number;
   outputChars: number;
   durationMs: number;
+  cacheHit: boolean;
+  changedFiles: number;
+  addedLines: number;
+  removedLines: number;
+  securityRejections: number;
+}
+
+export function summarizeEnrichmentChanges(
+  originals: readonly GeneratedFile[],
+  enriched: readonly GeneratedFile[]
+): Pick<EnrichMetrics, "changedFiles" | "addedLines" | "removedLines"> {
+  let changedFiles = 0;
+  let addedLines = 0;
+  let removedLines = 0;
+  for (let index = 0; index < originals.length; index++) {
+    const before = originals[index].content.split("\n");
+    const after = enriched[index]?.content.split("\n") ?? [];
+    if (originals[index].content === enriched[index]?.content) continue;
+    changedFiles++;
+    const beforeCounts = new Map<string, number>();
+    const afterCounts = new Map<string, number>();
+    for (const line of before) beforeCounts.set(line, (beforeCounts.get(line) ?? 0) + 1);
+    for (const line of after) afterCounts.set(line, (afterCounts.get(line) ?? 0) + 1);
+    for (const [line, count] of afterCounts) addedLines += Math.max(0, count - (beforeCounts.get(line) ?? 0));
+    for (const [line, count] of beforeCounts) removedLines += Math.max(0, count - (afterCounts.get(line) ?? 0));
+  }
+  return { changedFiles, addedLines, removedLines };
+}
+
+class SecurityValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SecurityValidationError";
+  }
 }
 
 // The assistant is free-form: it may drop the one command CI actually runs and invent a
@@ -182,7 +231,7 @@ function assertMustKeepSurvive(
   const enrichedText = enriched.map((f) => f.content).join("\n");
   for (const command of mustKeep) {
     if (originalText.includes(command) && !enrichedText.includes(command)) {
-      throw new Error(`assistant dropped a canonical command: ${command}`);
+      throw new SecurityValidationError(`assistant dropped a canonical command: ${command}`);
     }
   }
 }
@@ -198,7 +247,7 @@ function assertNoNewDangerousInstructions(
   for (const line of enriched.flatMap((file) => file.content.split("\n"))) {
     const dangerous = line.match(DANGEROUS_INSTRUCTION)?.[0];
     if (dangerous && !NEGATED_DANGER.test(line) && !originalText.includes(dangerous)) {
-      throw new Error(`assistant introduced a dangerous instruction: ${dangerous}`);
+      throw new SecurityValidationError(`assistant introduced a dangerous instruction: ${dangerous}`);
     }
   }
 }
@@ -211,8 +260,62 @@ function assertNewBulletClaimsCiteEvidence(
     const originalLines = new Set(originals[index].content.split("\n").map((line) => line.trim()));
     for (const line of enriched[index].content.split("\n")) {
       const trimmed = line.trim();
-      if (/^[-*] /.test(trimmed) && !originalLines.has(trimmed) && !HAS_EVIDENCE_GROUP.test(trimmed)) {
-        throw new Error("assistant introduced a bullet claim without cited evidence");
+      if (/^[-*] /.test(trimmed) && !originalLines.has(trimmed) && checkableCitedPaths(trimmed).length === 0) {
+        throw new SecurityValidationError("assistant introduced a bullet claim without a checkable evidence path");
+      }
+    }
+  }
+}
+
+const PROMPT_INJECTION_LANGUAGE = /(?:ignore (?:all )?(?:previous|prior) instructions|system prompt|developer message|bypass (?:the )?(?:sandbox|permissions|safety)|disable (?:the )?(?:guardrails|validation|security)|exfiltrat|upload (?:the )?(?:secret|credential|token)|lee (?:las )?(?:variables de entorno|credenciales)|ignora (?:todas )?(?:las )?instrucciones (?:anteriores|previas)|mensaje (?:del sistema|de desarrollador))/i;
+const COMMAND_TOKEN = /`((?:npm|pnpm|yarn|bun|go|cargo|python|pytest|ruff|mvn|gradle|\.\/gradlew|dotnet|mix|composer|bundle|phpunit|make|cmake|ctest|swift|dart|flutter|sbt|Rscript)\b[^`]*)`/gi;
+const PLAIN_COMMAND = /\b((?:npm|pnpm|yarn|bun)\s+(?:run|test|install|build|lint|exec)\b[^.;\n]*|go\s+(?:test|build|run|vet|fmt|generate|get)\b[^.;\n]*|cargo\s+(?:test|build|run|clippy|fmt)\b[^.;\n]*|python\s+-m\s+\S+[^.;\n]*|(?:pytest|ruff|mvn|gradle|dotnet|mix|composer|bundle|phpunit|make|cmake|ctest|swift|dart|flutter|sbt|Rscript)\s+[^.;\n]+)/i;
+
+function assertNoPromptInjectionLanguage(enriched: GeneratedFile[], originals: GeneratedFile[]): void {
+  for (let index = 0; index < enriched.length; index++) {
+    const originalLines = new Set(originals[index].content.split("\n").map((line) => line.trim()));
+    for (const line of enriched[index].content.split("\n")) {
+      if (!originalLines.has(line.trim()) && PROMPT_INJECTION_LANGUAGE.test(line)) {
+        throw new SecurityValidationError("assistant introduced prompt-injection or safety-bypass language");
+      }
+    }
+  }
+}
+
+function assertNoUnverifiedCommands(
+  enriched: GeneratedFile[],
+  originals: GeneratedFile[],
+  allowedCommands: readonly string[]
+): void {
+  const originalText = originals.map((file) => file.content).join("\n");
+  const allowed = new Set(allowedCommands.map((command) => command.trim()));
+  for (const file of enriched) {
+    for (const match of file.content.matchAll(COMMAND_TOKEN)) {
+      const command = match[1].trim();
+      if (!originalText.includes(`\`${command}\``) && !allowed.has(command)) {
+        throw new SecurityValidationError(`assistant introduced an unverified command: ${command}`);
+      }
+    }
+  }
+  for (let index = 0; index < enriched.length; index++) {
+    const originalLines = new Set(originals[index].content.split("\n").map((line) => line.trim()));
+    for (const line of enriched[index].content.split("\n")) {
+      if (originalLines.has(line.trim())) continue;
+      const command = line.replace(/`[^`]*`/g, "").match(PLAIN_COMMAND)?.[1]?.replace(/[*_]/g, "").trim();
+      if (!command) continue;
+      throw new SecurityValidationError(`assistant introduced an unquoted command: ${command}`);
+    }
+  }
+}
+
+function assertNoNewHeadings(enriched: GeneratedFile[], originals: GeneratedFile[]): void {
+  for (let index = 0; index < enriched.length; index++) {
+    const originalHeadings = new Set(
+      originals[index].content.split("\n").filter((line) => /^#{1,6}\s+/.test(line.trim())).map((line) => line.trim())
+    );
+    for (const heading of enriched[index].content.split("\n").filter((line) => /^#{1,6}\s+/.test(line.trim()))) {
+      if (!originalHeadings.has(heading.trim())) {
+        throw new SecurityValidationError(`assistant introduced an unapproved section: ${heading.trim()}`);
       }
     }
   }
@@ -227,7 +330,6 @@ function assistantFailureDetail(assistant: AssistantId, error: unknown): string 
 }
 
 const EVIDENCE_GROUP = /\((?:evidencia|evidence):([^)]*)\)/gi;
-const HAS_EVIDENCE_GROUP = /\((?:evidencia|evidence):[^)]*\)/i;
 // A checkable citation is a plain relative path; tokens with spaces, URLs or globs are
 // left alone rather than guessed at.
 const PATH_TOKEN = /^[\w.@~-]+(?:[\\/][\w.@~-]+)*[\\/]?$/;
@@ -252,11 +354,22 @@ function dropUnverifiableClaims(
   rootPath: string
 ): { files: GeneratedFile[]; missing: string[] } {
   const missing = new Set<string>();
+  const root = path.resolve(rootPath);
+  const evidenceExists = (relativePath: string): boolean => {
+    const absolutePath = path.resolve(root, relativePath);
+    if (absolutePath === root || !absolutePath.startsWith(`${root}${path.sep}`)) return false;
+    try {
+      const stat = fs.lstatSync(absolutePath);
+      return stat.isFile() && !stat.isSymbolicLink();
+    } catch {
+      return false;
+    }
+  };
   const checked = files.map((file) => {
     const kept = file.content.split("\n").filter((line) => {
       const cited = checkableCitedPaths(line);
       if (cited.length === 0) return true;
-      if (cited.some((p) => fs.existsSync(path.join(rootPath, p)))) return true;
+      if (cited.some(evidenceExists)) return true;
       for (const p of cited) missing.add(p);
       return !/^\s*[-*] /.test(line);
     });
@@ -275,7 +388,10 @@ export async function enrichFilesWithAssistant(
   files: GeneratedFile[],
   options: EnrichOptions = {}
 ): Promise<GeneratedFile[]> {
-  const { execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], existingDocs = [], model, onMetrics } = options;
+  const {
+    execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], existingDocs = [], model,
+    maxAttempts = 2, onMetrics,
+  } = options;
   const existingDocsJson = existingDocs.length > 0 ? JSON.stringify(existingDocs) : undefined;
   const enriched: GeneratedFile[] = [];
   const batches = makeBatches(files);
@@ -284,12 +400,13 @@ export async function enrichFilesWithAssistant(
   let fallbackBatches = 0;
   let inputChars = 0;
   let outputChars = 0;
+  let securityRejections = 0;
   for (const batch of batches) {
     const input = UI[lang].enrichPrompt(JSON.stringify(batch), mustKeep, existingDocsJson);
     let attemptInput = input;
     // Contract violations (invalid JSON, changed paths, dropped commands) are stochastic,
     // especially with smaller models; one bounded retry recovers most of them.
-    let attemptsLeft = 2;
+    let attemptsLeft = Math.max(1, Math.min(3, maxAttempts));
     while (attemptsLeft > 0) {
       attemptsLeft--;
       attempts++;
@@ -301,6 +418,9 @@ export async function enrichFilesWithAssistant(
         assertMustKeepSurvive(parsed, batch, mustKeep);
         assertNoNewDangerousInstructions(parsed, batch);
         assertNewBulletClaimsCiteEvidence(parsed, batch);
+        assertNoPromptInjectionLanguage(parsed, batch);
+        assertNoUnverifiedCommands(parsed, batch, mustKeep);
+        assertNoNewHeadings(parsed, batch);
         if (cwd) {
           const verified = dropUnverifiableClaims(parsed, cwd);
           if (verified.missing.length > 0) console.warn(UI[lang].enrichEvidenceDropped(verified.missing));
@@ -309,6 +429,7 @@ export async function enrichFilesWithAssistant(
         enriched.push(...parsed);
         break;
       } catch (err) {
+        if (err instanceof SecurityValidationError) securityRejections++;
         if (attemptsLeft > 0) {
           const detail = assistantFailureDetail(assistant, err);
           attemptInput = `${input}\n\nYour previous response was rejected: ${detail}. Correct that exact problem and return the required JSON array only.`;
@@ -321,6 +442,7 @@ export async function enrichFilesWithAssistant(
       }
     }
   }
+  const changes = summarizeEnrichmentChanges(files, enriched);
   onMetrics?.({
     assistant,
     model,
@@ -330,6 +452,9 @@ export async function enrichFilesWithAssistant(
     inputChars,
     outputChars,
     durationMs: Date.now() - startedAt,
+    cacheHit: false,
+    ...changes,
+    securityRejections,
   });
   return enriched;
 }

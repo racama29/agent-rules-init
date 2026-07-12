@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-12
+
+### Added
+
+- Verified enrichment cache keyed by repository content, deterministic baseline, assistant/model and accepted output hashes.
+- Configurable per-attempt timeout and retry budget through CLI flags and repository configuration.
+- Enrichment change metrics for cache hits, changed files/lines and semantic-security rejections.
+
+### Security
+
+- Reject prompt-injection language, unverified commands and new Markdown sections in assistant output.
+- Treat existing instruction documents as delimited untrusted data and reject evidence paths outside the repository or through symlinks.
+
 ## [0.6.2] - 2026-07-12
 
 ### Changed
@@ -47,7 +60,8 @@ All notable changes to this project are documented here. The format follows
 - `--enrich`, `--assistant`, `--model`, `--check`, `--dry-run` and JSON automation.
 - CI coverage for Node.js 18, 20 and 22 on Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/racama29/agent-rules-init/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/racama29/agent-rules-init/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/racama29/agent-rules-init/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/racama29/agent-rules-init/compare/v0.5.0...v0.6.0

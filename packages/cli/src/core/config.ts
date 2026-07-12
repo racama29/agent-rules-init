@@ -4,7 +4,11 @@ import { parse } from "yaml";
 import type { Lang } from "./i18n.js";
 
 const CONFIG_FILENAMES = [".agent-rules-init.yml", ".agent-rules-init.yaml"] as const;
-const ROOT_KEYS = new Set(["lang", "exclude", "projects", "noAi", "enrich", "assistant", "model"]);
+const ROOT_KEYS = new Set([
+  "lang", "exclude", "projects", "noAi", "enrich", "assistant", "model",
+  "enrichCache", "enrichTimeoutSeconds",
+  "enrichRetries",
+]);
 const PROJECT_KEYS = ["framework", "testRunner", "linter", "packageManager"] as const;
 const PROJECT_KEY_SET: ReadonlySet<string> = new Set(PROJECT_KEYS);
 
@@ -23,6 +27,12 @@ export interface AgentRulesConfig {
   enrich?: boolean;
   assistant?: "claude" | "codex";
   model?: string;
+  /** Reuse verified enriched staging when repository inputs are unchanged. Defaults to true. */
+  enrichCache?: boolean;
+  /** Per-assistant-attempt timeout in seconds (10..3600). */
+  enrichTimeoutSeconds?: number;
+  /** Validation retries after the first attempt (0..2). */
+  enrichRetries?: number;
 }
 
 export interface LoadedConfig {
@@ -147,6 +157,29 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
 
   const model = optionalNonEmptyString(value.model, "model", warnings);
   if (model !== undefined) config.model = model;
+
+  if (value.enrichCache !== undefined) {
+    if (typeof value.enrichCache === "boolean") config.enrichCache = value.enrichCache;
+    else warnings.push('Configuration key "enrichCache" must be a boolean; it was ignored.');
+  }
+
+  if (value.enrichTimeoutSeconds !== undefined) {
+    const timeout = value.enrichTimeoutSeconds;
+    if (typeof timeout === "number" && Number.isInteger(timeout) && timeout >= 10 && timeout <= 3600) {
+      config.enrichTimeoutSeconds = timeout;
+    } else {
+      warnings.push('Configuration key "enrichTimeoutSeconds" must be an integer from 10 to 3600; it was ignored.');
+    }
+  }
+
+  if (value.enrichRetries !== undefined) {
+    const retries = value.enrichRetries;
+    if (typeof retries === "number" && Number.isInteger(retries) && retries >= 0 && retries <= 2) {
+      config.enrichRetries = retries;
+    } else {
+      warnings.push('Configuration key "enrichRetries" must be an integer from 0 to 2; it was ignored.');
+    }
+  }
 
   return config;
 }
