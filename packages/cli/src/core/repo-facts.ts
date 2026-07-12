@@ -41,9 +41,6 @@ export function extractJsPackageCommands(signals: RepoSignals): CommandEntry[] {
   return entries;
 }
 
-/** @deprecated Conservado como alias de API; también devuelve comandos pnpm/Yarn/Bun. */
-export const extractNpmCommands = extractJsPackageCommands;
-
 function jsScriptInvocation(manager: JsPackageManager, packageDir: string, script: string): string {
   const name = quoteShellArg(script);
   if (manager === "npm") {

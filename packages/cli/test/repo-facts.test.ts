@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  extractNpmCommands,
   extractJsPackageCommands,
   extractComposerCommands,
   extractMakeTargets,
@@ -21,9 +20,9 @@ function baseSignals(overrides: Partial<RepoSignals>): RepoSignals {
   return { rootPath: "/fake", files: [], hasFile: () => false, hasDir: () => false, ...overrides };
 }
 
-describe("extractNpmCommands", () => {
+describe("extractJsPackageCommands", () => {
   it("maps scripts to npm run invocations with the script body as detail", () => {
-    const entries = extractNpmCommands(
+    const entries = extractJsPackageCommands(
       baseSignals({
         packageJson: {
           dependencies: {},
@@ -37,7 +36,7 @@ describe("extractNpmCommands", () => {
   });
 
   it("uses the direct form for npm lifecycle scripts (test/start)", () => {
-    const entries = extractNpmCommands(
+    const entries = extractJsPackageCommands(
       baseSignals({
         packageJson: { dependencies: {}, devDependencies: {}, scripts: { test: "vitest run" }, moduleType: "commonjs" },
       })
@@ -46,8 +45,8 @@ describe("extractNpmCommands", () => {
   });
 
   it("skips empty script bodies and returns [] without package.json", () => {
-    expect(extractNpmCommands(baseSignals({}))).toEqual([]);
-    const entries = extractNpmCommands(
+    expect(extractJsPackageCommands(baseSignals({}))).toEqual([]);
+    const entries = extractJsPackageCommands(
       baseSignals({
         packageJson: { dependencies: {}, devDependencies: {}, scripts: { noop: "   " }, moduleType: "commonjs" },
       })
@@ -56,7 +55,7 @@ describe("extractNpmCommands", () => {
   });
 
   it("emits executable --prefix commands and origins for nested npm packages", () => {
-    const entries = extractNpmCommands(
+    const entries = extractJsPackageCommands(
       baseSignals({
         packageJsons: [
           {
