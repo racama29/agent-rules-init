@@ -411,7 +411,8 @@ describe("runCli", () => {
     );
 
     const promptFn = vi.fn().mockResolvedValue("");
-    await runCli(tmpDir, { promptFn, skipLlm: true });
+    // lang fijado: sin él, el contenido esperado dependería del locale de la máquina.
+    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
 
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("## Comandos del repo");
@@ -430,7 +431,7 @@ describe("runCli", () => {
     fs.rmSync(path.join(tmpDir, "package.json"));
     fs.writeFileSync(path.join(tmpDir, "Makefile"), "deploy:\n\trsync -a site/ server:/var/www\n");
     const promptFn = vi.fn().mockResolvedValue("");
-    await runCli(tmpDir, { promptFn, skipLlm: true });
+    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("No se detectó ningún stack conocido");
     expect(claudeMd).toContain("- `make deploy` (Makefile)");
