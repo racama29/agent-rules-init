@@ -15,12 +15,12 @@
     "check": "npm run typecheck && npm run lint && npm test && npm run test:quality && npm run build && npm run test:pack"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "@vitest/coverage-v8": "^3.2.7",
-    "eslint": "^9.0.0",
-    "typescript": "^5.6.0",
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.63.0",
-    "vite": "^6.4.3",
-    "vitest": "^3.2.7"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }

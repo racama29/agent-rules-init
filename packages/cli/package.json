@@ -53,8 +53,8 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/node": "^18.19.130",
-    "typescript": "^5.6.0",
-    "vitest": "^3.2.7"
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
