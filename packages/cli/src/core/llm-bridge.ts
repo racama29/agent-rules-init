@@ -30,18 +30,24 @@ function printArgs(assistant: AssistantId, model?: string): string[] {
   return ["exec", "--skip-git-repo-check", ...modelArgs, "-"];
 }
 
+// A hung assistant (expired session, dead network) must not hang the CLI forever;
+// 10 minutes comfortably covers real enrichment runs, and on expiry the rejection
+// lands in the normal fallback path that keeps the deterministic files.
+const EXEC_TIMEOUT_MS = 600_000;
+
 export const defaultExecFn: ExecFn = (command, args, stdin, cwd) =>
   new Promise((resolve, reject) => {
     // shell:true is only needed on Windows, to resolve npm-installed .cmd/.ps1 shims.
     // cwd matters for enrichment: the assistant explores the repo it runs in with its
     // own read tools, so it must be spawned at the target repo root, not wherever the
     // CLI process happens to live.
-    const child = spawn(command, args, { shell: process.platform === "win32", cwd });
+    const child = spawn(command, args, { shell: process.platform === "win32", cwd, timeout: EXEC_TIMEOUT_MS });
     let stdout = "";
     child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
     child.on("error", reject);
     child.on("close", (exitCode) => {
       if (exitCode === 0) resolve({ stdout, exitCode });
+      else if (child.killed) reject(new Error(`${command} timed out after ${EXEC_TIMEOUT_MS / 1000}s`));
       else reject(new Error(`${command} exited with code ${exitCode}`));
     });
     // Content always goes through stdin, never as a CLI argument: on Windows, spawn's
