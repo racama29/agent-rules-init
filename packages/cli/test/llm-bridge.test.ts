@@ -30,7 +30,9 @@ describe("detectAvailableAssistants", () => {
 describe("assistant process diagnostics", () => {
   it("preserves bounded stderr details from a failing assistant process", async () => {
     const exec = createDefaultExecFn(5_000);
-    await expect(exec(process.execPath, ["-e", "process.stderr.write('authentication required'); process.exit(2)"]))
+    // Keep every argument compatible with the Windows shell allowlist. The fixture
+    // still exercises the real child-process stderr path without embedding code in -e.
+    await expect(exec(process.execPath, ["test/fixtures/failing-assistant.cjs"]))
       .rejects.toThrow("authentication required");
   });
 });

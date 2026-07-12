@@ -20,5 +20,9 @@ export default tseslint.config(
   {
     files: ["packages/cli/scripts/**/*.mjs"],
     languageOptions: { globals: { console: "readonly", process: "readonly", Buffer: "readonly" } },
+  },
+  {
+    files: ["packages/cli/test/fixtures/**/*.cjs"],
+    languageOptions: { globals: { process: "readonly" } },
   }
 );
