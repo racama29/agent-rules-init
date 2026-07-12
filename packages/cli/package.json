@@ -1,6 +1,6 @@
 {
   "name": "agent-rules-init",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Generates CLAUDE.md, AGENTS.md, copilot-instructions.md and prompt files from what your repo actually is.",
   "license": "MIT",
   "type": "module",
