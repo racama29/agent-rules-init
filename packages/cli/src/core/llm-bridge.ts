@@ -286,15 +286,16 @@ export async function enrichFilesWithAssistant(
   let outputChars = 0;
   for (const batch of batches) {
     const input = UI[lang].enrichPrompt(JSON.stringify(batch), mustKeep, existingDocsJson);
+    let attemptInput = input;
     // Contract violations (invalid JSON, changed paths, dropped commands) are stochastic,
     // especially with smaller models; one bounded retry recovers most of them.
     let attemptsLeft = 2;
     while (attemptsLeft > 0) {
       attemptsLeft--;
       attempts++;
-      inputChars += input.length;
+      inputChars += attemptInput.length;
       try {
-        const result = await execFn(assistant, printArgs(assistant, model), input, cwd);
+        const result = await execFn(assistant, printArgs(assistant, model), attemptInput, cwd);
         outputChars += result.stdout.length;
         let parsed = parseAssistantBatch(result.stdout, batch);
         assertMustKeepSurvive(parsed, batch, mustKeep);
@@ -309,6 +310,8 @@ export async function enrichFilesWithAssistant(
         break;
       } catch (err) {
         if (attemptsLeft > 0) {
+          const detail = assistantFailureDetail(assistant, err);
+          attemptInput = `${input}\n\nYour previous response was rejected: ${detail}. Correct that exact problem and return the required JSON array only.`;
           console.warn(UI[lang].enrichRetrying(assistant));
         } else {
           console.warn(UI[lang].enrichFailed(assistant, assistantFailureDetail(assistant, err)));

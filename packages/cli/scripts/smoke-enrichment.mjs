@@ -37,21 +37,25 @@ function run(args) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) reject(new Error(`CLI exited ${code}: ${stderr}`));
-      else resolve(JSON.parse(stdout));
+      else resolve({ output: JSON.parse(stdout), stderr });
     });
   });
 }
 
 const before = fixtureHash();
-const deterministic = await run(["--dry-run", "--json", "--non-interactive", "--lang", "en"]);
+const deterministicRun = await run(["--dry-run", "--json", "--non-interactive", "--lang", "en"]);
 const enrichArgs = ["--dry-run", "--json", "--enrich", "--assistant", assistant, "--lang", "en"];
 if (model) enrichArgs.push("--model", model);
-const enriched = await run(enrichArgs);
+const enrichedRun = await run(enrichArgs);
+const deterministic = deterministicRun.output;
+const enriched = enrichedRun.output;
 const after = fixtureHash();
 
 if (before !== after) throw new Error("read-only enrichment changed the fixture");
 if (!enriched.enrichMetrics) throw new Error("enrichment metrics were not emitted");
-if (enriched.enrichMetrics.fallbackBatches !== 0) throw new Error("enrichment fell back to deterministic output");
+if (enriched.enrichMetrics.fallbackBatches !== 0) {
+  throw new Error(`enrichment fell back to deterministic output: ${enrichedRun.stderr.trim() || "no diagnostic emitted"}`);
+}
 const deterministicByPath = new Map(deterministic.results.map((result) => [result.path, result.content]));
 if (!enriched.results.some((result) => deterministicByPath.get(result.path) !== result.content)) {
   throw new Error("assistant returned no enriched content");

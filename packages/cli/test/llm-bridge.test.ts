@@ -147,6 +147,8 @@ describe("enrichFilesWithAssistant", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await expect(enrichFilesWithAssistant("claude", files, { execFn })).resolves.toEqual(files);
     expect(execFn).toHaveBeenCalledTimes(2);
+    expect(execFn.mock.calls[1][2]).toContain("previous response was rejected");
+    expect(execFn.mock.calls[1][2]).toContain("Unexpected token");
     warn.mockRestore();
   });
 
