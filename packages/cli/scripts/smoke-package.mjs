@@ -6,12 +6,15 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(packageRoot, "../..");
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath;
+if (!npmCli) throw new Error("npm_execpath is required to smoke-test the packed artifact");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-pack-"));
 const npmEnv = { ...process.env, npm_config_cache: path.join(tempRoot, "npm-cache") };
 
 try {
-  const packed = JSON.parse(execFileSync(npm, ["pack", "--json", "--pack-destination", tempRoot], {
+  // Invoke npm's JavaScript entrypoint through the current Node executable. Calling
+  // npm.cmd directly through execFileSync produces EINVAL on Windows without a shell.
+  const packed = JSON.parse(execFileSync(process.execPath, [npmCli, "pack", "--json", "--pack-destination", tempRoot], {
     cwd: packageRoot, encoding: "utf8", env: npmEnv,
   }));
   const tarball = path.join(tempRoot, packed[0].filename);
