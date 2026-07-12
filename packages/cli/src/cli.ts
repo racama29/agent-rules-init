@@ -19,10 +19,6 @@ import { loadConfig, type AgentRulesConfig } from "./core/config.js";
 import { applyProjectExcludes, buildPackageUnits } from "./core/project-units.js";
 import { renderProjectUnitAgents } from "./core/project-unit-output.js";
 import {
-  collectLowConfidenceQuestions,
-  askQuestions,
-  applyAnswers,
-  makeDefaultPromptFn,
   hasInteractiveTty,
   type PromptFn,
 } from "./core/prompt-engine.js";
@@ -78,6 +74,7 @@ const ALL_PACKS: Pack[] = [
 ];
 
 export interface RunCliOptions {
+  /** @deprecated Project metadata is no longer requested interactively. */
   promptFn?: PromptFn;
   execFn?: ExecFn;
   skipLlm?: boolean;
@@ -135,7 +132,6 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   options.onConfigWarnings?.(loadedConfig.warnings);
   const execFn = options.execFn ?? defaultExecFn;
   const lang = options.lang ?? config.lang ?? detectLang();
-  const promptFn = options.promptFn ?? makeDefaultPromptFn(lang);
   const ui = UI[lang];
 
   const signals = applyProjectExcludes(scanRepo(rootPath), config.exclude ?? []);
@@ -143,9 +139,11 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     (d): d is NonNullable<typeof d> => d !== null
   );
 
-  const questions = collectLowConfidenceQuestions(rawDetections, lang);
-  const answers = options.nonInteractive ? {} : await askQuestions(questions, promptFn);
-  const detections = applyAnswers(rawDetections, answers);
+  // Missing framework/tooling signals are valid facts, not questions the user should
+  // have to answer. Keep the low-confidence `none` value and render conservative,
+  // framework-neutral guidance; explicit repository config can still override project
+  // metadata when a team wants to provide it.
+  const detections = rawDetections;
   const facts = buildRepoFacts(signals, lang);
   options.onFacts?.(facts);
   const ctx = { facts, signals };

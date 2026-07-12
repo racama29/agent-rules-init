@@ -531,19 +531,22 @@ describe("runCli", () => {
     expect(claudeMd).toContain("react");
   });
 
-  it("asks a question when a pack detects with low confidence", async () => {
+  it("does not ask users to identify low-confidence project metadata", async () => {
     fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ dependencies: {}, devDependencies: {} }));
-    const promptFn = vi.fn().mockResolvedValue("custom-framework");
+    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
     await runCli(tmpDir, { promptFn, skipLlm: true });
-    expect(promptFn).toHaveBeenCalled();
+    expect(promptFn).not.toHaveBeenCalled();
   });
 
-  it("reflects the user's answer to a low-confidence question in the generated files", async () => {
-    fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ dependencies: {}, devDependencies: {} }));
-    const promptFn = vi.fn().mockResolvedValue("custom-framework");
-    await runCli(tmpDir, { promptFn, skipLlm: true });
+  it("renders conservative Go guidance without asking when no framework is detected", async () => {
+    fs.rmSync(path.join(tmpDir, "package.json"));
+    fs.writeFileSync(path.join(tmpDir, "go.mod"), "module example.com/plain\n\ngo 1.22\n");
+    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
+    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
-    expect(claudeMd).toContain("custom-framework");
+    expect(promptFn).not.toHaveBeenCalled();
+    expect(claudeMd).toContain("Proyecto Go (go modules).");
+    expect(claudeMd).toContain("`go test ./...`");
   });
 
   it("generates all general instruction files when no pack detects anything", async () => {
