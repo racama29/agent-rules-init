@@ -67,4 +67,4 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Publish the exact verified tarball
-        run: npm publish artifact/*.tgz --access public
+        run: npm publish ./artifact/*.tgz --access public

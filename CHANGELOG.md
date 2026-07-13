@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-13
+
+### Fixed
+
+- Publish the downloaded tarball through an explicit relative filesystem path so npm does not interpret `artifact/package.tgz` as a GitHub repository shorthand.
+
 ## [0.8.0] - 2026-07-13
 
 ### Added
@@ -100,7 +106,8 @@ All notable changes to this project are documented here. The format follows
 - `--enrich`, `--assistant`, `--model`, `--check`, `--dry-run` and JSON automation.
 - CI coverage for Node.js 18, 20 and 22 on Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/racama29/agent-rules-init/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/racama29/agent-rules-init/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/racama29/agent-rules-init/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/racama29/agent-rules-init/compare/v0.6.1...v0.6.2
