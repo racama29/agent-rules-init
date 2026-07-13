@@ -48,7 +48,7 @@
     "prepublishOnly": "npm run build && npm run test:pack"
   },
   "dependencies": {
-    "@clack/prompts": "^0.9.1",
+    "@clack/prompts": "^1.7.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
