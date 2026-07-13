@@ -21,7 +21,7 @@ All output is written with a `.generated` suffix and existing files are never ov
 
 Use `--lang es` or `--lang en` to select the output language. See the [full documentation](https://github.com/racama29/agent-rules-init#readme) for supported frameworks, generated files and contribution instructions.
 
-Automation is supported through `--dry-run`, `--force`, `--apply`, `--check`, `--json` and `--non-interactive`. Repository defaults, enrichment assistant/model and per-project overrides can be stored in `.agent-rules-init.yml`.
+Automation is supported through `--dry-run`, `--force`, `--apply`, `--check`, `--json` and `--non-interactive`. Enrichment preferences and per-project overrides can be stored in `.agent-rules-init.yml`, but only an explicit `--enrich` invocation can start an assistant.
 
 Use `--apply` after review to activate staging files; replaced finals are backed up under `.agent-rules-init/backups/`.
 
@@ -33,7 +33,9 @@ Verified enrichment is reused when repository inputs, assistant/model and accept
 
 Semantic validation rejects prompt-injection language, new sections, destructive instructions, commands absent from repository facts and evidence paths outside the repository. Metrics report cache hits, changed lines and security rejections in addition to batch, retry, input-size, fallback and duration data.
 
-Generated documents share an evidence-backed model but are not duplicates: Claude receives broad repository context, AGENTS receives operational commands and scope, and Copilot receives concise implementation conventions. Observed architecture and local conventions include their source files so specific claims can be audited.
+Generated documents distinguish a small, labeled stack-default section from repository observations. Claude receives broad repository context, AGENTS receives operational commands and scope, and Copilot receives concise implementation conventions. Observed architecture and local conventions include their source files so specific claims can be audited.
+
+Cursor and Gemini receive consumer-specific documents rather than title-only copies. Task prompts are generated only when canonical commands or verified repository facts can make them project-specific.
 
 ## License
 

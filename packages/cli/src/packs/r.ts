@@ -7,6 +7,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { detectNamedSignal, detectedName } from "./pack-helpers.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["shiny", "shiny"],
@@ -17,14 +18,7 @@ function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.rDescription ?? signals.renvLock;
   if (!source) return null;
   const lower = source.toLowerCase();
-
-  let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
-  for (const [needle, label] of FRAMEWORKS) {
-    if (lower.includes(needle)) {
-      framework = { value: label, confidence: "high" };
-      break;
-    }
-  }
+  const framework = detectNamedSignal(source, FRAMEWORKS);
 
   const testRunner: DetectionResult["testRunner"] = lower.includes("testthat")
     ? { value: "testthat", confidence: "high" }
@@ -58,7 +52,7 @@ const TEXTS: Record<Lang, { style: string; deps: string; arch: string[] }> = {
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   const testCmd = detection.testRunner?.value === "testthat" ? 'testthat::test_dir("tests")' : undefined;
   return {
     summary: summarySentence(lang, "R", framework, detection.packageManager?.value),
@@ -68,7 +62,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 }
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (R)", body: reviewBody(lang, "", framework) },

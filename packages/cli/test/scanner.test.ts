@@ -7,6 +7,24 @@ import { scanRepo } from "../src/core/scanner.js";
 const fixturesRoot = path.resolve(__dirname, "../../../fixtures");
 
 describe("scanRepo", () => {
+  it("uses Git's indexed and untracked file inventory inside a repository", () => {
+    const signals = scanRepo(path.resolve(fixturesRoot, ".."));
+    expect(signals.scanStats?.source).toBe("git");
+    expect(signals.files).toContain("packages/cli/package.json");
+  });
+
+  it("falls back to the filesystem outside a Git repository", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-fallback-"));
+    try {
+      fs.writeFileSync(path.join(tmpDir, "package.json"), "{}");
+      const signals = scanRepo(tmpDir);
+      expect(signals.scanStats?.source).toBe("filesystem");
+      expect(signals.files).toEqual(["package.json"]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("finds manifests nested deeper than the old fixed four-level limit", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-scanner-depth-"));
     try {

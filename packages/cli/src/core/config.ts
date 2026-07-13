@@ -1,14 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
-import { parse } from "yaml";
+import { createRequire } from "node:module";
 import type { Lang } from "./i18n.js";
+
+const require = createRequire(import.meta.url);
+let yamlParse: ((source: string) => unknown) | undefined;
+function parseYaml(source: string): unknown {
+  yamlParse ??= (require("yaml") as { parse: (source: string) => unknown }).parse;
+  return yamlParse(source);
+}
 
 const CONFIG_FILENAMES = [".agent-rules-init.yml", ".agent-rules-init.yaml"] as const;
 const ROOT_KEYS = new Set([
-  "lang", "exclude", "projects", "noAi", "enrich", "assistant", "model",
+  "lang", "exclude", "projects", "noAi", "assistant", "model",
   "enrichCache", "enrichTimeoutSeconds",
   "enrichRetries",
-  "scanMaxDepth", "scanMaxFiles", "scanWorkerTimeoutSeconds",
+  "scanMaxDepth", "scanMaxFiles",
 ]);
 const PROJECT_KEYS = ["framework", "testRunner", "linter", "packageManager"] as const;
 const PROJECT_KEY_SET: ReadonlySet<string> = new Set(PROJECT_KEYS);
@@ -25,7 +32,6 @@ export interface AgentRulesConfig {
   exclude?: string[];
   projects?: Record<string, ProjectConfig>;
   noAi?: boolean;
-  enrich?: boolean;
   assistant?: "claude" | "codex";
   model?: string;
   /** Reuse verified enriched staging when repository inputs are unchanged. Defaults to true. */
@@ -38,8 +44,6 @@ export interface AgentRulesConfig {
   scanMaxDepth?: number;
   /** Maximum files collected before stopping the repository scan (100..1,000,000). */
   scanMaxFiles?: number;
-  /** Worker scan timeout before a synchronous compatibility fallback (1..300 seconds). */
-  scanWorkerTimeoutSeconds?: number;
 }
 
 export interface LoadedConfig {
@@ -152,11 +156,6 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
     else warnings.push('Configuration key "noAi" must be a boolean; it was ignored.');
   }
 
-  if (value.enrich !== undefined) {
-    if (typeof value.enrich === "boolean") config.enrich = value.enrich;
-    else warnings.push('Configuration key "enrich" must be a boolean; it was ignored.');
-  }
-
   if (value.assistant !== undefined) {
     if (value.assistant === "claude" || value.assistant === "codex") config.assistant = value.assistant;
     else warnings.push('Configuration key "assistant" must be "claude" or "codex"; it was ignored.');
@@ -202,13 +201,6 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
     } else warnings.push('Configuration key "scanMaxFiles" must be an integer from 100 to 1000000; it was ignored.');
   }
 
-  if (value.scanWorkerTimeoutSeconds !== undefined) {
-    const timeout = value.scanWorkerTimeoutSeconds;
-    if (typeof timeout === "number" && Number.isInteger(timeout) && timeout >= 1 && timeout <= 300) {
-      config.scanWorkerTimeoutSeconds = timeout;
-    } else warnings.push('Configuration key "scanWorkerTimeoutSeconds" must be an integer from 1 to 300; it was ignored.');
-  }
-
   return config;
 }
 
@@ -236,7 +228,7 @@ export function loadConfig(rootPath: string): LoadedConfig {
 
   let parsed: unknown;
   try {
-    parsed = parse(raw);
+    parsed = parseYaml(raw);
   } catch (error) {
     const detail = error instanceof Error ? ` ${error.message}` : "";
     throw new ConfigError(`Invalid YAML in ${sourcePath}.${detail}`, sourcePath, { cause: error });

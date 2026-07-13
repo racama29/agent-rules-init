@@ -7,6 +7,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { detectNamedSignal, detectedName } from "./pack-helpers.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["find_package(qt", "qt"],
@@ -41,23 +42,11 @@ function detect(signals: RepoSignals): DetectionResult | null {
     signals.makefile && looksLikeCppMakefile(signals.makefile) ? signals.makefile : undefined;
   const source = signals.cmakeLists ?? makefileSource;
   if (!source) return null;
-  const lower = source.toLowerCase();
-
-  let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
-  for (const [needle, label] of FRAMEWORKS) {
-    if (lower.includes(needle)) {
-      framework = { value: label, confidence: "high" };
-      break;
-    }
-  }
-
-  let testRunner: DetectionResult["testRunner"] = { value: "unknown", confidence: "low" };
-  for (const [needle, label] of TEST_RUNNERS) {
-    if (lower.includes(needle)) {
-      testRunner = { value: label, confidence: "high" };
-      break;
-    }
-  }
+  const framework = detectNamedSignal(source, FRAMEWORKS);
+  const detectedRunner = detectNamedSignal(source, TEST_RUNNERS);
+  const testRunner = detectedRunner.value === "none"
+    ? { value: "unknown", confidence: "low" as const }
+    : detectedRunner;
 
   const packageManager: DetectionResult["packageManager"] = signals.cmakeLists
     ? { value: "cmake", confidence: "high" }
@@ -91,7 +80,7 @@ const TEXTS: Record<Lang, { style: string; memory: string; arch: string[]; revie
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   const testCmd = detection.packageManager?.value === "cmake" ? "cmake --build . && ctest" : "make test";
   return {
     summary: summarySentence(lang, "C/C++", framework, detection.packageManager?.value),
@@ -102,7 +91,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (C/C++)", body: reviewBody(lang, t.reviewFocus, framework) },

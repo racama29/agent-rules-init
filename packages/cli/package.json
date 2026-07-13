@@ -1,11 +1,9 @@
 {
   "name": "agent-rules-init",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Generates CLAUDE.md, AGENTS.md, copilot-instructions.md and prompt files from what your repo actually is.",
   "license": "MIT",
   "type": "module",
-  "main": "dist/cli.js",
-  "types": "dist/cli.d.ts",
   "bin": {
     "agent-rules-init": "dist/bin.js"
   },
@@ -36,17 +34,18 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:pack": "npm run build && node scripts/smoke-package.mjs",
+    "test:pack": "node scripts/smoke-package.mjs && node scripts/check-package-size.mjs",
     "test:hardening": "vitest run test/hardening.test.ts test/quality-matrix.test.ts test/writer.test.ts test/scanner.test.ts",
-    "test:quality": "vitest run test/corpus.test.ts test/quality-matrix.test.ts",
+    "test:quality": "vitest run test/corpus.test.ts test/quality-matrix.test.ts test/ecosystem-corpus.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src test scripts",
-    "check": "npm run typecheck && npm run lint && npm test && npm run test:pack",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run test:pack",
     "test:enrich": "npm run build && node scripts/smoke-enrichment.mjs",
-    "prepublishOnly": "npm run check"
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "prepublishOnly": "npm run build && npm run test:pack"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",
@@ -54,6 +53,7 @@
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
+    "esbuild": "^0.25.0",
     "typescript": "^5.6.0",
     "vitest": "^3.2.7"
   }

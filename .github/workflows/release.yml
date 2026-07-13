@@ -14,21 +14,57 @@ permissions:
   id-token: write
 
 jobs:
-  publish:
+  full-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ["18", "20", "22"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build-artifact:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
-          registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
       - name: Verify tag matches package version
         run: node -e "if ('v' + require('./packages/cli/package.json').version !== process.env.GITHUB_REF_NAME) process.exit(1)"
-      - name: Publish package
-        run: npm publish --workspace packages/cli --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Pack the verified artifact once
+        working-directory: packages/cli
+        run: npm pack --ignore-scripts
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: packages/cli/*.tgz
+          if-no-files-found: error
+
+  publish:
+    needs: [full-matrix, build-artifact]
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: artifact
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish the exact verified tarball
+        run: npm publish artifact/*.tgz --access public

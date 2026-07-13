@@ -7,6 +7,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { detectNamedSignal, detectedName } from "./pack-helpers.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["gin-gonic/gin", "gin"],
@@ -29,15 +30,7 @@ function extractGoRequireSection(goMod: string): string {
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.goMod;
   if (!source) return null;
-  const lower = extractGoRequireSection(source).toLowerCase();
-
-  let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
-  for (const [needle, label] of FRAMEWORKS) {
-    if (lower.includes(needle)) {
-      framework = { value: label, confidence: "high" };
-      break;
-    }
-  }
+  const framework = detectNamedSignal(extractGoRequireSection(source), FRAMEWORKS);
 
   return {
     packId: "go",
@@ -71,7 +64,7 @@ const TEXTS: Record<Lang, { style: string; errors: string; arch: string[]; revie
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   return {
     summary: summarySentence(lang, "Go", framework, "go modules"),
     conventions: [t.style, runTestsConvention(lang, "`go test ./...`"), t.errors],
@@ -81,7 +74,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   return [
     { id: "review", title: "Code Review (Go)", body: reviewBody(lang, t.reviewFocus, framework) },
     { id: "refactor", title: "Refactor (Go)", body: refactorBody(lang) },

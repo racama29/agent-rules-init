@@ -7,6 +7,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { detectNamedSignal, detectedName } from "./pack-helpers.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["playframework", "play"],
@@ -24,23 +25,11 @@ const TEST_RUNNERS: [string, string][] = [
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.buildSbt;
   if (!source) return null;
-  const lower = source.toLowerCase();
-
-  let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
-  for (const [needle, label] of FRAMEWORKS) {
-    if (lower.includes(needle)) {
-      framework = { value: label, confidence: "high" };
-      break;
-    }
-  }
-
-  let testRunner: DetectionResult["testRunner"] = { value: "unknown", confidence: "low" };
-  for (const [needle, label] of TEST_RUNNERS) {
-    if (lower.includes(needle)) {
-      testRunner = { value: label, confidence: "high" };
-      break;
-    }
-  }
+  const framework = detectNamedSignal(source, FRAMEWORKS);
+  const detectedRunner = detectNamedSignal(source, TEST_RUNNERS);
+  const testRunner = detectedRunner.value === "none"
+    ? { value: "unknown", confidence: "low" as const }
+    : detectedRunner;
 
   return {
     packId: "scala",
@@ -74,7 +63,7 @@ const TEXTS: Record<Lang, { style: string; immutability: string; arch: string[];
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   return {
     summary: summarySentence(lang, "Scala", framework, "sbt"),
     conventions: [t.style, runTestsConvention(lang, "`sbt test`"), t.immutability],
@@ -84,7 +73,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   const runner = detection.testRunner?.value !== "unknown" ? detection.testRunner?.value : undefined;
   return [
     { id: "review", title: "Code Review (Scala)", body: reviewBody(lang, t.reviewFocus, framework) },

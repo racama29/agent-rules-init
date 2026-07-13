@@ -55,7 +55,13 @@ export interface RepoSignals {
   guidanceFiles?: { path: string; content: string }[];
   /** Non-fatal conditions that may make repository detection incomplete. */
   scanWarnings?: string[];
-  scanStats?: { files: number; durationMs: number; truncated: boolean; mode?: "sync" | "worker" | "sync-fallback" };
+  scanStats?: {
+    files: number;
+    durationMs: number;
+    truncated: boolean;
+    mode?: "sync";
+    source?: "git" | "filesystem";
+  };
 }
 
 export type Confidence = "high" | "low";

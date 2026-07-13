@@ -8,8 +8,9 @@ Run this from the repository root:
 npx agent-rules-init
 ```
 
-The command inspects local manifests, CI and configuration without contacting the
-network. It creates only `*.generated.*` staging files and does not replace active
+The generator inspects local manifests, CI and configuration without making network
+requests. `npx` itself may download the package when it is not already cached. The
+generator creates only `*.generated.*` staging files and does not replace active
 assistant instructions.
 
 ## 2. Review what was detected

@@ -19,7 +19,7 @@ try {
   }));
   const tarball = path.join(tempRoot, packed[0].filename);
   const files = new Set(packed[0].files.map((entry) => entry.path));
-  for (const required of ["dist/bin.js", "dist/cli.js", "dist/cli.d.ts", "package.json", "README.md", "LICENSE"]) {
+  for (const required of ["dist/bin.js", "package.json", "README.md", "LICENSE"]) {
     if (!files.has(required)) throw new Error(`packed artifact is missing ${required}`);
   }
   if ([...files].some((file) => file.startsWith("src/") || file.startsWith("test/"))) {
@@ -38,7 +38,7 @@ try {
   const dryRun = JSON.parse(execFileSync(process.execPath, [binPath, "--dry-run", "--non-interactive", "--json"], {
     cwd: path.join(repoRoot, "fixtures", "node-plain"), encoding: "utf8",
   }));
-  if (dryRun.scanStats?.mode !== "worker") throw new Error("published CLI did not scan in a worker thread");
+  if (dryRun.scanStats?.mode !== "sync") throw new Error("published CLI did not use the low-latency scanner");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }

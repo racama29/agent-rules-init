@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-13
+
+### Added
+
+- A versioned product contract and architecture decision for the deterministic, evidence-first core.
+- An offline ecosystem corpus with positive, neutral and false-positive cases for all 15 supported stacks.
+- Published-package size budgets and reproducible startup/10,000-file scan benchmarks.
+- Consumer and corpus methodology documentation.
+
+### Changed
+
+- Scan versioned repositories through `git ls-files`, with a bounded filesystem fallback outside Git.
+- Load only stack packs whose defining manifests are present and ship a minified, code-split CLI build.
+- Give Claude, AGENTS, Copilot, Cursor and Gemini genuinely consumer-specific information budgets.
+- Omit task prompts unless canonical commands or observed facts can make them repository-specific.
+- Label pack-authored guidance as stack defaults and keep observed claims separate with file evidence.
+- Run the fast cross-version suite on Ubuntu and reserve the full OS/Node matrix for releases.
+- Build and verify one tarball artifact before publishing that exact artifact with npm provenance.
+
+### Removed
+
+- Worker-thread scanning, whose startup and fallback complexity cost more than the synchronous bounded scan.
+- Interactive metadata questions and the configuration-only `enrich` switch.
+
+### Migration
+
+- Replace `enrich: true` in `.agent-rules-init.yml` with an explicit `agent-rules-init --enrich` invocation. Assistant and model preferences remain valid configuration.
+- A repository with insufficient evidence may now produce fewer task-prompt files; this is intentional rather than a generation failure.
+
 ## [0.7.0] - 2026-07-12
 
 ### Added
@@ -71,7 +100,8 @@ All notable changes to this project are documented here. The format follows
 - `--enrich`, `--assistant`, `--model`, `--check`, `--dry-run` and JSON automation.
 - CI coverage for Node.js 18, 20 and 22 on Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/racama29/agent-rules-init/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/racama29/agent-rules-init/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/racama29/agent-rules-init/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/racama29/agent-rules-init/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/racama29/agent-rules-init/compare/v0.6.0...v0.6.1

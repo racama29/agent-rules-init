@@ -1,9 +1,7 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import * as clack from "@clack/prompts";
 import { scanRepo } from "./core/scanner.js";
-import { scanRepoInWorker } from "./core/scanner-async.js";
 import { writeGeneratedFiles, type GeneratedFile, type WriteResult } from "./core/writer.js";
 import {
   renderClaudeMd,
@@ -19,21 +17,8 @@ import { UI, detectLang, type Lang } from "./core/i18n.js";
 import { loadConfig, type AgentRulesConfig } from "./core/config.js";
 import { applyProjectExcludes, buildPackageUnits } from "./core/project-units.js";
 import { renderProjectUnitAgents } from "./core/project-unit-output.js";
-import {
-  hasInteractiveTty,
-  type PromptFn,
-} from "./core/prompt-engine.js";
-import {
-  detectAvailableAssistants,
-  enrichFilesWithAssistant,
-  estimateEnrichment,
-  createDefaultExecFn,
-  DEFAULT_EXEC_TIMEOUT_MS,
-  summarizeEnrichmentChanges,
-  type AssistantId,
-  type EnrichMetrics,
-  type ExecFn,
-} from "./core/llm-bridge.js";
+import { hasInteractiveTty } from "./core/prompt-engine.js";
+import type { AssistantId, EnrichMetrics, ExecFn } from "./core/llm-bridge.js";
 import type { RepoFacts, RepoSignals } from "./core/types.js";
 import {
   hashGeneratedFiles,
@@ -44,15 +29,15 @@ import {
 import { loadCachedEnrichment, makeEnrichmentState } from "./core/enrichment-cache.js";
 import { evaluateGenerationCheck } from "./core/check-state.js";
 import { applyGeneratedFiles, type ActivationResult } from "./core/activation.js";
-import { ALL_PACKS, findPack } from "./packs/index.js";
+import { loadCandidatePacks } from "./packs/index.js";
 import { readExistingDocs } from "./core/existing-docs.js";
 import { resolveCliAction } from "./core/cli-options.js";
 export { resolveCliAction } from "./core/cli-options.js";
 export type { CliAction, CliRunOptions } from "./core/cli-options.js";
 
+const DEFAULT_ENRICH_TIMEOUT_MS = 300_000;
+
 export interface RunCliOptions {
-  /** @deprecated Project metadata is no longer requested interactively. */
-  promptFn?: PromptFn;
   execFn?: ExecFn;
   skipLlm?: boolean;
   lang?: Lang;
@@ -86,16 +71,13 @@ export interface RunCliOptions {
   onFacts?: (facts: RepoFacts) => void;
   onScanWarnings?: (warnings: readonly string[]) => void;
   onScanStats?: (stats: NonNullable<RepoSignals["scanStats"]>) => void;
-  /** Offload repository traversal to a worker thread. Enabled by the published binary. */
-  useScannerWorker?: boolean;
 }
 
 export async function runCli(rootPath: string, options: RunCliOptions = {}): Promise<WriteResult[]> {
   const loadedConfig = options.config ? { config: options.config, warnings: [] } : loadConfig(rootPath);
   const config = loadedConfig.config;
   options.onConfigWarnings?.(loadedConfig.warnings);
-  const timeoutSeconds = options.enrichTimeoutSeconds ?? config.enrichTimeoutSeconds ?? DEFAULT_EXEC_TIMEOUT_MS / 1000;
-  const execFn = options.execFn ?? createDefaultExecFn(timeoutSeconds * 1000);
+  const timeoutSeconds = options.enrichTimeoutSeconds ?? config.enrichTimeoutSeconds ?? DEFAULT_ENRICH_TIMEOUT_MS / 1000;
   const lang = options.lang ?? config.lang ?? detectLang();
   const ui = UI[lang];
 
@@ -103,23 +85,12 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     maxDepth: config.scanMaxDepth,
     maxFiles: config.scanMaxFiles,
   };
-  let scanned: RepoSignals;
-  if (options.useScannerWorker) {
-    try {
-      scanned = await scanRepoInWorker(rootPath, scanOptions, (config.scanWorkerTimeoutSeconds ?? 30) * 1_000);
-    } catch (error) {
-      scanned = scanRepo(rootPath, scanOptions);
-      scanned.scanWarnings = [
-        ...(scanned.scanWarnings ?? []),
-        `Scanner worker unavailable; used synchronous fallback: ${(error as Error).message}`,
-      ];
-      if (scanned.scanStats) scanned.scanStats.mode = "sync-fallback";
-    }
-  } else scanned = scanRepo(rootPath, scanOptions);
+  const scanned: RepoSignals = scanRepo(rootPath, scanOptions);
   const signals = applyProjectExcludes(scanned, config.exclude ?? []);
   options.onScanWarnings?.(signals.scanWarnings ?? []);
   if (signals.scanStats) options.onScanStats?.(signals.scanStats);
-  const rawDetections = ALL_PACKS.map((pack) => pack.detect(signals)).filter(
+  const candidatePacks = await loadCandidatePacks(signals);
+  const rawDetections = candidatePacks.map((pack) => pack.detect(signals)).filter(
     (d): d is NonNullable<typeof d> => d !== null
   );
 
@@ -132,8 +103,9 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   options.onFacts?.(facts);
   const ctx = { facts, signals };
 
+  const detectedPacks = new Map(candidatePacks.map((pack) => [pack.id, pack]));
   const entries: RenderEntry[] = detections.map((detection) => {
-    const pack = findPack(detection.packId);
+    const pack = detectedPacks.get(detection.packId)!;
     return { detection, ruleSet: pack.rules(detection, lang, ctx) };
   });
 
@@ -152,8 +124,8 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     });
     files.push({ path: "GEMINI.generated.md", content: renderGeminiMd(entries, facts, lang) });
     for (const detection of detections) {
-      const pack = findPack(detection.packId);
-      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx))) {
+      const pack = detectedPacks.get(detection.packId)!;
+      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx), facts, lang)) {
         files.push(file);
       }
     }
@@ -186,26 +158,30 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   options.onBaselineHash?.(baselineHash);
   let acceptedEnrichmentState: EnrichmentState | undefined;
 
-  const wantsEnrich = (options.enrich ?? config.enrich) === true;
-  const canOfferEnrich = !options.nonInteractive && hasInteractiveTty();
-  if (!options.skipLlm && !config.noAi && (wantsEnrich || canOfferEnrich)) {
+  const wantsEnrich = options.enrich === true;
+  const interactiveOutput = !options.nonInteractive && hasInteractiveTty();
+  if (!options.skipLlm && !config.noAi && wantsEnrich) {
+    const {
+      createDefaultExecFn,
+      detectAvailableAssistants,
+      enrichFilesWithAssistant,
+      estimateEnrichment,
+      summarizeEnrichmentChanges,
+    } = await import("./core/llm-bridge.js");
+    const execFn = options.execFn ?? createDefaultExecFn(timeoutSeconds * 1000);
+    const enrichClack = interactiveOutput ? await import("@clack/prompts") : undefined;
     // With --enrich there may be no TTY (scripts, CI); route progress through stderr so
     // stdout stays parseable in --json mode.
-    const notify = canOfferEnrich ? (message: string) => clack.log.info(message) : (message: string) => console.warn(message);
+    const notify = enrichClack ? (message: string) => enrichClack.log.info(message) : (message: string) => console.warn(message);
     const assistants = await detectAvailableAssistants(execFn);
     const requested = options.assistant ?? config.assistant;
     if (requested && !assistants.includes(requested)) {
       console.warn(ui.assistantNotAvailable(requested));
     } else if (assistants.length === 0) {
-      if (wantsEnrich) console.warn(ui.enrichNoAssistant);
+      console.warn(ui.enrichNoAssistant);
     } else {
       const chosenAssistant = requested ?? assistants[0];
-      let proceed = wantsEnrich;
-      if (!proceed) {
-        clack.log.info(ui.enrichDetected(chosenAssistant));
-        proceed = (await clack.confirm({ message: ui.enrichConfirm(chosenAssistant) })) === true;
-      }
-      if (proceed) {
+      {
         const existingDocs = readExistingDocs(rootPath);
         const model = options.model ?? config.model;
         const requestedState = makeEnrichmentState(
@@ -236,7 +212,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
         } else {
           const estimate = estimateEnrichment(files);
           if (estimate.batches > 1) notify(ui.enrichLargeInput(estimate.characters, estimate.batches));
-          const spinner = canOfferEnrich ? clack.spinner() : undefined;
+          const spinner = enrichClack?.spinner();
           const retries = options.enrichRetries ?? config.enrichRetries ?? 1;
           notify(ui.enrichBudget(timeoutSeconds, retries + 1));
           if (spinner) spinner.start(ui.enrichWorking(chosenAssistant));
@@ -356,17 +332,13 @@ export async function main(): Promise<void> {
   const nonInteractive = action.nonInteractive === true || machineOutput || planningOnly || action.apply === true;
   // Enrichment output is non-deterministic, so --check (freshness comparison) must stay
   // on the deterministic baseline.
-  if (!machineOutput) clack.intro("agent-rules-init");
-
-  if (!machineOutput && !nonInteractive && !hasInteractiveTty()) {
-    console.warn(ui.noTtyWarning);
-  }
+  const clack = machineOutput ? undefined : await import("@clack/prompts");
+  if (clack) clack.intro("agent-rules-init");
 
   try {
     const loadedConfig = loadConfig(process.cwd());
     const apply = action.apply === true && action.check !== true && action.dryRun !== true;
-    const configuredEnrich = (action.enrich ?? loadedConfig.config.enrich) === true;
-    const enrich = configuredEnrich && action.check !== true && !(apply && action.force !== true);
+    const enrich = action.enrich === true && action.check !== true && !(apply && action.force !== true);
     const lang = action.lang ?? loadedConfig.config.lang ?? defaultLang;
     ui = UI[lang];
     if (action.enrich === true && action.check === true) console.warn(ui.enrichIgnoredWithCheck);
@@ -412,7 +384,6 @@ export async function main(): Promise<void> {
       onScanStats: (stats) => {
         scanStats = stats;
       },
-      useScannerWorker: true,
     });
     if (!machineOutput) for (const warning of scanWarnings) console.warn(warning);
     let activationResults: ActivationResult[] = [];
@@ -463,21 +434,21 @@ export async function main(): Promise<void> {
       }
     } else if (apply) {
       for (const result of activationResults) {
-        if (result.status === "applied") clack.log.success(ui.fileApplied(result.activePath, result.backupPath));
-        else if (result.status === "unchanged") clack.log.info(ui.fileAlreadyApplied(result.activePath));
-        else if (result.status === "error") clack.log.warn(`${result.activePath}: ${result.error}`);
+        if (result.status === "applied") clack!.log.success(ui.fileApplied(result.activePath, result.backupPath));
+        else if (result.status === "unchanged") clack!.log.info(ui.fileAlreadyApplied(result.activePath));
+        else if (result.status === "error") clack!.log.warn(`${result.activePath}: ${result.error}`);
       }
     } else if (!action.check) for (const result of results) {
       if (result.status === "written" || result.status === "overwritten") {
-        clack.log.success(result.path);
+        clack!.log.success(result.path);
       } else if (result.status === "skipped") {
-        clack.log.info(ui.fileSkipped(result.path));
+        clack!.log.info(ui.fileSkipped(result.path));
       } else {
-        clack.log.warn(`${result.path}: ${result.error}`);
+        clack!.log.warn(`${result.path}: ${result.error}`);
       }
     }
 
-    if (!machineOutput && enrichMetrics) clack.log.info(ui.enrichMetrics(enrichMetrics));
+    if (!machineOutput && enrichMetrics) clack!.log.info(ui.enrichMetrics(enrichMetrics));
 
     if (!machineOutput && action.check) {
       console.log(
@@ -488,11 +459,11 @@ export async function main(): Promise<void> {
     } else if (!machineOutput && action.dryRun) {
       console.log(`\n${ui.dryRunSummary(changed.length)}`);
     } else if (!machineOutput && apply) {
-      clack.outro(ui.outroApplied);
+      clack!.outro(ui.outroApplied);
     } else if (!machineOutput && changed.length > 0) {
-      clack.outro(ui.outroWritten);
+      clack!.outro(ui.outroWritten);
     } else if (!machineOutput) {
-      clack.outro(ui.outroNothing);
+      clack!.outro(ui.outroNothing);
     }
 
     if (failures.length > 0 || activationResults.some((result) => result.status === "error") || (action.check && checkIssues > 0)) {
@@ -503,7 +474,7 @@ export async function main(): Promise<void> {
     if (machineOutput) {
       console.log(JSON.stringify({ mode: action.check ? "check" : action.dryRun ? "dry-run" : action.apply ? "apply" : "write", error: message }));
     } else {
-      clack.log.error(message);
+      clack!.log.error(message);
     }
     process.exitCode = 1;
   }

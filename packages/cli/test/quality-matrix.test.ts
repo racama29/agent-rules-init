@@ -59,8 +59,8 @@ function signals(overrides: Partial<RepoSignals>): RepoSignals {
 describe("30-scenario stack quality matrix", () => {
   expect(SCENARIOS).toHaveLength(30);
   for (const scenario of SCENARIOS) {
-    it(scenario.name, () => {
-      const detection = findPack(scenario.pack).detect(signals(scenario.signals));
+    it(scenario.name, async () => {
+      const detection = (await findPack(scenario.pack)).detect(signals(scenario.signals));
       expect(detection, `${scenario.name} should detect its language pack`).not.toBeNull();
       expect(detection?.framework?.value).toBe(scenario.framework);
       expect(detection?.framework?.confidence).toBe(scenario.framework === "none" ? "low" : "high");

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { parse } from "yaml";
+import { createRequire } from "node:module";
 import { UI, type Lang } from "./i18n.js";
 import { selectCanonicalCommands } from "./canonical-commands.js";
 import type {
@@ -13,6 +13,13 @@ import type {
   RepoFacts,
   RepoSignals,
 } from "./types.js";
+
+const require = createRequire(import.meta.url);
+let yamlParse: ((source: string) => unknown) | undefined;
+function parseYaml(source: string): unknown {
+  yamlParse ??= (require("yaml") as { parse: (source: string) => unknown }).parse;
+  return yamlParse(source);
+}
 
 const NPM_DIRECT_LIFECYCLE = new Set(["test", "start", "stop", "restart"]);
 
@@ -173,7 +180,7 @@ export function extractCiCommands(signals: RepoSignals): { commands: CiCommand[]
   for (const workflow of signals.githubWorkflows ?? []) {
     let doc: unknown;
     try {
-      doc = parse(workflow.content);
+      doc = parseYaml(workflow.content);
     } catch {
       continue; // YAML inválido: omitir antes que inventar
     }

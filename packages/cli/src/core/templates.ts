@@ -10,23 +10,47 @@ export interface RenderEntry {
 function renderSection(
   entries: RenderEntry[],
   lang: Lang,
-  options: { summaries?: boolean; conventions?: boolean; architecture?: boolean; operationalConventions?: boolean } = {}
+  options: {
+    summaries?: boolean;
+    defaults?: boolean;
+    operationalConventions?: boolean;
+    architectureDefaults?: boolean;
+  } = {}
 ): string {
   const ui = UI[lang];
   const { summaries = true } = options;
+  const seenDefaults = new Set<string>();
+  const unique = (items: readonly string[], seen: Set<string>, limit: number) => items
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
   return entries
     .map(({ detection, ruleSet }) => {
       const conventionItems = options.operationalConventions === false
         ? ruleSet.conventions.filter((item) => !/^(?:Run the tests|Run the repository|Ejecuta los tests|Ejecuta la suite)/i.test(item))
         : ruleSet.conventions;
-      const conventions = conventionItems.map((c) => `- ${c}`).join("\n");
-      const architecture = ruleSet.architectureNotes.map((a) => `- ${a}`).join("\n");
+      // Pack-authored advice is useful context but is not repository evidence. Keep a
+      // small, explicitly labeled default section and reserve observed sections for
+      // high-confidence facts with cited paths.
+      const defaults = unique(
+        [
+          ...conventionItems,
+          ...(options.architectureDefaults === false ? [] : ruleSet.architectureNotes),
+        ],
+        seenDefaults,
+        2
+      ).map((item) => `- ${item}`).join("\n");
       const parts = [
         `## ${detection.language} (${detection.packId})`,
       ];
       if (summaries) parts.push("", ruleSet.summary);
-      if (options.conventions !== false && conventions) parts.push("", `### ${ui.sections.conventions}`, conventions);
-      if (options.architecture !== false && architecture) parts.push("", `### ${ui.sections.architecture}`, architecture);
+      if (options.defaults !== false && defaults) parts.push("", `### ${ui.sections.defaults}`, defaults);
       return parts.join("\n");
     })
     .join("\n\n");
@@ -108,7 +132,7 @@ function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts 
     "",
     UI[lang].generatedHeader,
     "",
-    renderSection(entries, lang, { architecture: !(facts?.architectureFacts?.length) }),
+    renderSection(entries, lang),
     ...(factsBlock ? ["", factsBlock] : []),
   ].join("\n");
 }
@@ -123,7 +147,7 @@ export function renderAgentsMd(entries: RenderEntry[], facts: RepoFacts | undefi
     : "Operational rules for modifying this repository. Respect scope and validate changes with the commands below.";
   const blocks = [
     "# AGENTS.md", "", UI[lang].generatedHeader, "", intro, "",
-    renderSection(entries, lang, { architecture: !(facts?.architectureFacts?.length) }),
+    renderSection(entries, lang),
   ];
   if (facts) {
     const canonical = renderCanonical(facts, lang);
@@ -140,7 +164,7 @@ export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFac
     : "Apply these conventions when completing and modifying code. Omit terminal operations unless the change requires them.";
   const blocks = [
     "# Copilot Instructions", "", UI[lang].generatedHeader, "", intro, "",
-    renderSection(entries, lang, { architecture: false, operationalConventions: false }),
+    renderSection(entries, lang, { operationalConventions: false, architectureDefaults: false }),
   ];
   if (facts) {
     const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
@@ -151,33 +175,70 @@ export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFac
 }
 
 export function renderCursorRules(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  const body = renderAgentsMd(entries, facts, lang).replace("# AGENTS.md", "# Repository rules");
-  return [
+  const intro = lang === "es"
+    ? "Reglas breves que Cursor debe aplicar siempre al editar este repositorio."
+    : "Concise rules Cursor should always apply while editing this repository.";
+  const blocks = [
     "---",
     "description: Repository-specific conventions and validation commands",
     "alwaysApply: true",
     "---",
     "",
-    body,
-  ].join("\n");
+    "# Repository rules", "", UI[lang].generatedHeader, "", intro, "",
+    renderSection(entries, lang, { summaries: false, architectureDefaults: false }),
+  ];
+  if (facts) {
+    const canonical = renderCanonical(facts, lang);
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+    for (const block of [canonical, conventions]) if (block) blocks.push("", block);
+  }
+  return blocks.join("\n");
 }
 
 export function renderGeminiMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  return renderAgentsMd(entries, facts, lang).replace("# AGENTS.md", "# GEMINI.md");
+  const intro = lang === "es"
+    ? "Contexto de proyecto para investigar, implementar y verificar cambios con Gemini CLI."
+    : "Project context for investigating, implementing and verifying changes with Gemini CLI.";
+  const factsBlock = facts ? renderRepoFacts(facts, lang) : "";
+  return [
+    "# GEMINI.md", "", UI[lang].generatedHeader, "", intro, "",
+    renderSection(entries, lang, { operationalConventions: false }),
+    ...(factsBlock ? ["", factsBlock] : []),
+  ].join("\n");
 }
 
 export function renderPromptFiles(
   packId: string,
-  templates: PromptTemplate[]
+  templates: PromptTemplate[],
+  facts: RepoFacts,
+  lang: Lang
 ): { path: string; content: string }[] {
-  return templates.flatMap((template) => [
+  const canonical = facts.canonical.filter((item) => item.confidence === "high");
+  const architecture = (facts.architectureFacts ?? []).filter((item) => item.confidence === "high");
+  const conventions = (facts.conventionFacts ?? []).filter((item) => item.confidence === "high");
+  const relevant = templates.filter((template) => {
+    if (template.id === "testing") return canonical.some((item) => item.kind === "test");
+    if (template.id === "refactor") return architecture.length > 0;
+    return canonical.length > 0 || conventions.length > 0;
+  });
+  const contextLines = [
+    ...canonical.slice(0, 3).map((item) => `- ${item.kind}: \`${item.command}\` (${item.source})`),
+    ...architecture.slice(0, 2).map((item) => `- ${item.statement} (${evidenceLabel(lang)}: ${item.evidence.map((path) => `\`${path}\``).join(", ")})`),
+    ...conventions.slice(0, 2).map((item) => `- ${item.statement} (${evidenceLabel(lang)}: ${item.evidence.map((path) => `\`${path}\``).join(", ")})`),
+  ];
+  const context = [
+    lang === "es" ? "## Contexto verificado del repositorio" : "## Verified repository context",
+    "",
+    ...contextLines,
+  ].join("\n");
+  return relevant.flatMap((template) => [
     {
       path: `.claude/commands/${packId}-${template.id}.generated.md`,
-      content: `# ${template.title}\n\n${template.body}\n`,
+      content: `# ${template.title}\n\n${context}\n\n${template.body}\n`,
     },
     {
       path: `.github/prompts/${packId}-${template.id}.generated.prompt.md`,
-      content: `# ${template.title}\n\n${template.body}\n`,
+      content: `# ${template.title}\n\n${context}\n\n${template.body}\n`,
     },
   ]);
 }

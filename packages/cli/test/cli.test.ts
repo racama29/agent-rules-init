@@ -432,24 +432,20 @@ describe("runCli", () => {
     expect(fs.readFileSync(path.join(tmpDir, "CLAUDE.md"), "utf8")).toBe("manual final");
   });
 
-  it("does not ask questions or inspect assistants in non-interactive mode", async () => {
+  it("does not inspect assistants during a normal run", async () => {
     fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ dependencies: {}, devDependencies: {} }));
-    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
     const execFn = vi.fn().mockRejectedValue(new Error("must not execute"));
 
-    await runCli(tmpDir, { promptFn, execFn, nonInteractive: true });
+    await runCli(tmpDir, { execFn });
 
-    expect(promptFn).not.toHaveBeenCalled();
     expect(execFn).not.toHaveBeenCalled();
   });
 
   it("runs enrichment without prompting when enrich is set, even non-interactively", async () => {
     const execFn = makeEnrichExecFn();
-    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
 
-    await runCli(tmpDir, { promptFn, execFn, nonInteractive: true, enrich: true });
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
 
-    expect(promptFn).not.toHaveBeenCalled();
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("ENRIQUECIDO");
   });
@@ -527,10 +523,10 @@ describe("runCli", () => {
     expect(enrichmentCalls()).toBe(3);
   });
 
-  it("loads enrichment assistant and model defaults from repository config", async () => {
+  it("uses enrichment assistant and model preferences only with explicit enrich", async () => {
     fs.writeFileSync(
       path.join(tmpDir, ".agent-rules-init.yml"),
-      "enrich: true\nassistant: codex\nmodel: gpt-5.5\n"
+      "assistant: codex\nmodel: gpt-5.5\n"
     );
     const execFn = vi.fn().mockImplementation(async (_command: string, args: string[], stdin?: string) => {
       if (args[0] === "--version") return { stdout: "1.0.0", exitCode: 0 };
@@ -538,7 +534,7 @@ describe("runCli", () => {
       return { stdout: JSON.stringify(JSON.parse(filesJson)), exitCode: 0 };
     });
 
-    await runCli(tmpDir, { execFn, nonInteractive: true });
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
 
     const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
     expect(enrichCall?.[0]).toBe("codex");
@@ -572,8 +568,15 @@ describe("runCli", () => {
   });
 
   it("generates CLAUDE.md, AGENTS.md, copilot-instructions and prompt files for a JS/TS repo", async () => {
-    const promptFn = vi.fn().mockResolvedValue("");
-    const results = await runCli(tmpDir, { promptFn, skipLlm: true });
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({
+        dependencies: { react: "^18.3.0" },
+        devDependencies: { vitest: "^2.1.0" },
+        scripts: { test: "vitest run" },
+      })
+    );
+    const results = await runCli(tmpDir, { skipLlm: true });
 
     expect(results.find((r) => r.path === "CLAUDE.generated.md")?.status).toBe("written");
     expect(results.find((r) => r.path === "AGENTS.generated.md")?.status).toBe("written");
@@ -592,26 +595,21 @@ describe("runCli", () => {
 
   it("does not ask users to identify low-confidence project metadata", async () => {
     fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({ dependencies: {}, devDependencies: {} }));
-    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
-    await runCli(tmpDir, { promptFn, skipLlm: true });
-    expect(promptFn).not.toHaveBeenCalled();
+    await runCli(tmpDir, { skipLlm: true });
   });
 
   it("renders conservative Go guidance without asking when no framework is detected", async () => {
     fs.rmSync(path.join(tmpDir, "package.json"));
     fs.writeFileSync(path.join(tmpDir, "go.mod"), "module example.com/plain\n\ngo 1.22\n");
-    const promptFn = vi.fn().mockRejectedValue(new Error("must not prompt"));
-    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
+    await runCli(tmpDir, { skipLlm: true, lang: "es" });
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
-    expect(promptFn).not.toHaveBeenCalled();
     expect(claudeMd).toContain("Proyecto Go (go modules).");
     expect(claudeMd).toContain("`go test ./...`");
   });
 
   it("generates all general instruction files when no pack detects anything", async () => {
     fs.rmSync(path.join(tmpDir, "package.json"));
-    const promptFn = vi.fn().mockResolvedValue("");
-    const results = await runCli(tmpDir, { promptFn, skipLlm: true });
+    const results = await runCli(tmpDir, { skipLlm: true });
     expect(results.map((result) => result.path)).toEqual([
       "CLAUDE.generated.md",
       "AGENTS.generated.md",
@@ -638,9 +636,8 @@ describe("runCli", () => {
       })
     );
 
-    const promptFn = vi.fn().mockResolvedValue("");
     // lang fijado: sin él, el contenido esperado dependería del locale de la máquina.
-    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
+    await runCli(tmpDir, { skipLlm: true, lang: "es" });
 
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("## Comandos del repo");
@@ -658,8 +655,7 @@ describe("runCli", () => {
   it("includes repo facts in the fallback file when no stack is detected", async () => {
     fs.rmSync(path.join(tmpDir, "package.json"));
     fs.writeFileSync(path.join(tmpDir, "Makefile"), "deploy:\n\trsync -a site/ server:/var/www\n");
-    const promptFn = vi.fn().mockResolvedValue("");
-    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "es" });
+    await runCli(tmpDir, { skipLlm: true, lang: "es" });
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("No se detectó ningún stack conocido");
     expect(claudeMd).toContain("- `make deploy` (Makefile)");
@@ -668,17 +664,15 @@ describe("runCli", () => {
   });
 
   it("generates fully English output with lang en", async () => {
-    const promptFn = vi.fn().mockResolvedValue("");
-    await runCli(tmpDir, { promptFn, skipLlm: true, lang: "en" });
+    await runCli(tmpDir, { skipLlm: true, lang: "en" });
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("Generated by agent-rules-init");
     expect(claudeMd).not.toMatch(/Proyecto|Comandos del repo|Ejecuta los tests|Generado por/);
   });
 
   it("reports every file as skipped (never error) when re-run on the same repo", async () => {
-    const promptFn = vi.fn().mockResolvedValue("");
-    await runCli(tmpDir, { promptFn, skipLlm: true });
-    const secondRun = await runCli(tmpDir, { promptFn, skipLlm: true });
+    await runCli(tmpDir, { skipLlm: true });
+    const secondRun = await runCli(tmpDir, { skipLlm: true });
 
     expect(secondRun.length).toBeGreaterThan(0);
     expect(secondRun.every((r) => r.status === "skipped")).toBe(true);
@@ -687,11 +681,19 @@ describe("runCli", () => {
 
   it("does not drop prompt files when two packs are detected in the same repo", async () => {
     fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({
+        dependencies: { react: "^18.3.0" },
+        devDependencies: { vitest: "^2.1.0" },
+        scripts: { test: "vitest run" },
+      })
+    );
+    fs.writeFileSync(
       path.join(tmpDir, "requirements.txt"),
       "fastapi==0.115.0\npytest==8.3.0"
     );
-    const promptFn = vi.fn().mockResolvedValue("");
-    const results = await runCli(tmpDir, { promptFn, skipLlm: true });
+    fs.writeFileSync(path.join(tmpDir, "tox.ini"), "[tox]\nenvlist = py311\n");
+    const results = await runCli(tmpDir, { skipLlm: true });
     const errors = results.filter((r) => r.status === "error");
     expect(errors).toEqual([]);
     expect(

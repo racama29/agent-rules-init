@@ -7,6 +7,7 @@ import {
   testingBody,
   type Lang,
 } from "../core/i18n.js";
+import { detectNamedSignal, detectedName } from "./pack-helpers.js";
 
 const FRAMEWORKS: [string, string][] = [
   ["actix-web", "actix-web"],
@@ -17,15 +18,7 @@ const FRAMEWORKS: [string, string][] = [
 function detect(signals: RepoSignals): DetectionResult | null {
   const source = signals.cargoToml;
   if (!source) return null;
-  const lower = source.toLowerCase();
-
-  let framework: DetectionResult["framework"] = { value: "none", confidence: "low" };
-  for (const [needle, label] of FRAMEWORKS) {
-    if (lower.includes(needle)) {
-      framework = { value: label, confidence: "high" };
-      break;
-    }
-  }
+  const framework = detectNamedSignal(source, FRAMEWORKS);
 
   return {
     packId: "rust",
@@ -61,7 +54,7 @@ const TEXTS: Record<Lang, { style: string; unwrap: string; arch: string[]; revie
 
 function rules(detection: DetectionResult, lang: Lang): RuleSet {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   return {
     summary: summarySentence(lang, "Rust", framework, "cargo"),
     conventions: [t.style, runTestsConvention(lang, "`cargo test`"), t.unwrap],
@@ -71,7 +64,7 @@ function rules(detection: DetectionResult, lang: Lang): RuleSet {
 
 function promptTemplates(detection: DetectionResult, lang: Lang): PromptTemplate[] {
   const t = TEXTS[lang];
-  const framework = detection.framework?.value !== "none" ? detection.framework?.value : undefined;
+  const framework = detectedName(detection.framework);
   return [
     { id: "review", title: "Code Review (Rust)", body: reviewBody(lang, t.reviewFocus, framework) },
     { id: "refactor", title: "Refactor (Rust)", body: refactorBody(lang, t.refactorExtra) },

@@ -50,6 +50,50 @@ describe("corpus snapshots", () => {
 });
 
 describe("content quality gates", () => {
+  it("keeps generated guidance concise, unique and evidence-dense", async () => {
+    for (const fixture of CORPUS) {
+      const files = await renderCorpus(fixture, "en");
+      for (const [filePath, content] of files) {
+        const lines = content.split("\n");
+        const limit = filePath.endsWith(".md") && !filePath.includes("generated.prompt") ? 160 : 40;
+        expect(lines.length, `${fixture}/${filePath} exceeds ${limit} lines`).toBeLessThanOrEqual(limit);
+        const bullets = lines.filter((line) => line.startsWith("- "));
+        expect(new Set(bullets).size, `${fixture}/${filePath} repeats guidance`).toBe(bullets.length);
+      }
+
+      const consumer = files.get("CLAUDE.generated.md")!;
+      const evidenceSections = consumer
+        .split(/^## /m)
+        .filter((section) => section.startsWith("Observed architecture") || section.startsWith("Verified local conventions"));
+      for (const section of evidenceSections) {
+        for (const bullet of section.split("\n").filter((line) => line.startsWith("- "))) {
+          expect(bullet, `${fixture} has an unverified observed claim`).toContain("(evidence:");
+        }
+      }
+
+      const consumerPaths = [
+        "CLAUDE.generated.md",
+        "AGENTS.generated.md",
+        ".github/copilot-instructions.generated.md",
+        ".cursor/rules/repository.generated.mdc",
+        "GEMINI.generated.md",
+      ];
+      const normalize = (content: string) => content
+        .replace(/^---[\s\S]*?---\n/, "")
+        .replace(/^# .+$/m, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const normalized = consumerPaths.map((filePath) => normalize(files.get(filePath)!));
+      expect(new Set(normalized).size, `${fixture} has duplicate consumer guidance`).toBe(normalized.length);
+
+      for (const [filePath, content] of files) {
+        if (!filePath.includes("/prompts/") && !filePath.startsWith(".claude/commands/")) continue;
+        expect(content, `${fixture}/${filePath} lacks repository context`).toContain("## Verified repository context");
+        expect(content, `${fixture}/${filePath} lacks evidence`).toMatch(/\([^)]*(?:package\.json|pyproject\.toml|pom\.xml|evidence:)/);
+      }
+    }
+  });
+
   it("meets the versioned corpus quality score", async () => {
     let earned = 0;
     let available = 0;

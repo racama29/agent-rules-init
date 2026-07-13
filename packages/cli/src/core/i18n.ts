@@ -64,14 +64,11 @@ export interface UiTexts {
     commands: string;
     structure: string;
     ci: string;
-    conventions: string;
-    architecture: string;
+    defaults: string;
     canonical: string;
   };
   andMore: (count: number, file?: string) => string;
   noStackFallback: string;
-  question: (fieldLabel: string, language: string) => string;
-  fieldLabels: { framework: string; testRunner: string; linter: string; packageManager: string };
   usage: string;
   automationUsage: string;
   unknownOption: (flag: string) => string;
@@ -90,10 +87,6 @@ export interface UiTexts {
   fileApplied: (path: string, backupPath?: string) => string;
   fileAlreadyApplied: (path: string) => string;
   assistantNotAvailable: (assistant: string) => string;
-  noTtyWarning: string;
-  skippedQuestion: (message: string) => string;
-  enrichDetected: (assistant: string) => string;
-  enrichConfirm: (assistant: string) => string;
   enrichWorking: (assistant: string) => string;
   enrichCacheHit: string;
   enrichBudget: (timeoutSeconds: number, attempts: number) => string;
@@ -124,19 +117,11 @@ export const UI: Record<Lang, UiTexts> = {
       commands: "Comandos del repo",
       structure: "Estructura",
       ci: "Lo que ejecuta CI (GitHub Actions)",
-      conventions: "Convenciones",
-      architecture: "Arquitectura",
+      defaults: "Defaults del stack",
       canonical: "Comandos canónicos",
     },
     andMore: (count, file) => (file ? `…y ${count} más en ${file}` : `…y ${count} más`),
     noStackFallback: "No se detectó ningún stack conocido. Completa este archivo manualmente.",
-    question: (fieldLabel, language) => `No se pudo determinar ${fieldLabel} para ${language}. ¿Cuál usáis?`,
-    fieldLabels: {
-      framework: "el framework",
-      testRunner: "el test runner",
-      linter: "el linter",
-      packageManager: "el gestor de paquetes",
-    },
     usage: `agent-rules-init — genera CLAUDE.md, AGENTS.md, copilot-instructions y prompts de review/refactor/testing a partir del stack detectado en tu repo.
 
 Uso:
@@ -154,7 +139,7 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
   --apply           activa los archivos generados; guarda backup de los finales reemplazados
   --check           falla si los archivos generados o activados faltan o están obsoletos; nunca escribe
   --json            emite un único resultado JSON legible por máquinas
-  --non-interactive omite preguntas y la oferta de enriquecimiento con IA
+  --non-interactive omite la oferta de enriquecimiento con IA
   --enrich          fuerza el enriquecimiento con IA sin preguntar (también sin TTY; combinable con --non-interactive)
   --assistant <id>  elige el asistente para enriquecer: claude o codex (por defecto, el primero instalado)
   --model <modelo>  modelo a usar, pasado tal cual al asistente (p. ej. haiku, gpt-5.5); por defecto, el del asistente
@@ -178,15 +163,6 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
     fileAlreadyApplied: (path) => `${path}: ya estaba actualizado.`,
     assistantNotAvailable: (assistant) =>
       `Se pidió ${assistant} con --assistant pero no está instalado; se conserva la versión generada.`,
-    noTtyWarning:
-      "No se detectó una terminal interactiva (esto pasa a veces en Git Bash en Windows). " +
-      "Continuando sin preguntas ni oferta de enriquecimiento con IA; se usarán los valores detectados.",
-    skippedQuestion: (message) =>
-      `No se detectó una terminal interactiva; se omite la pregunta "${message}" y se usa el valor detectado.`,
-    enrichDetected: (assistant) =>
-      `${assistant} detectado — puede analizar el código de este repo y sustituir las secciones genéricas por reglas específicas verificadas.`,
-    enrichConfirm: (assistant) =>
-      `¿Quieres que ${assistant} analice el repositorio y enriquezca los archivos generados? Usará tu instalación de ${assistant} y puede tardar unos minutos.`,
     enrichWorking: (assistant) => `${assistant} está analizando el repositorio y enriqueciendo los archivos…`,
     enrichCacheHit: "Se reutiliza el enriquecimiento verificado: el repositorio y las salidas no han cambiado.",
     enrichBudget: (timeoutSeconds, attempts) =>
@@ -264,19 +240,11 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
       commands: "Repo commands",
       structure: "Structure",
       ci: "What CI runs (GitHub Actions)",
-      conventions: "Conventions",
-      architecture: "Architecture",
+      defaults: "Stack defaults",
       canonical: "Canonical commands",
     },
     andMore: (count, file) => (file ? `…and ${count} more in ${file}` : `…and ${count} more`),
     noStackFallback: "No known stack was detected. Fill in this file manually.",
-    question: (fieldLabel, language) => `Couldn't determine ${fieldLabel} for ${language}. Which one do you use?`,
-    fieldLabels: {
-      framework: "the framework",
-      testRunner: "the test runner",
-      linter: "the linter",
-      packageManager: "the package manager",
-    },
     usage: `agent-rules-init — generates CLAUDE.md, AGENTS.md, copilot-instructions and review/refactor/testing prompts from the stack detected in your repo.
 
 Usage:
@@ -294,7 +262,7 @@ review their content and run --apply to activate them with safe backups.`,
   --apply           activate generated files; back up any replaced final files
   --check           fail when generated or activated files are missing/outdated; never write
   --json            emit a single machine-readable JSON result
-  --non-interactive skip questions and the AI-enrichment offer
+  --non-interactive skip the AI-enrichment offer
   --enrich          force AI enrichment without asking (works without a TTY; composable with --non-interactive)
   --assistant <id>  pick the enrichment assistant: claude or codex (defaults to the first one installed)
   --model <model>   model to use, forwarded verbatim to the assistant (e.g. haiku, gpt-5.5); defaults to the assistant's own
@@ -318,15 +286,6 @@ review their content and run --apply to activate them with safe backups.`,
     fileAlreadyApplied: (path) => `${path}: already up to date.`,
     assistantNotAvailable: (assistant) =>
       `${assistant} was requested with --assistant but is not installed; keeping the generated version.`,
-    noTtyWarning:
-      "No interactive terminal detected (this sometimes happens in Git Bash on Windows). " +
-      "Continuing without questions or the AI-enrichment offer; detected values will be used.",
-    skippedQuestion: (message) =>
-      `No interactive terminal detected; skipping the question "${message}" and using the detected value.`,
-    enrichDetected: (assistant) =>
-      `${assistant} detected — it can analyze this repo's code and replace the generic sections with verified, repo-specific rules.`,
-    enrichConfirm: (assistant) =>
-      `Do you want ${assistant} to analyze the repository and enrich the generated files? It will use your ${assistant} installation and may take a few minutes.`,
     enrichWorking: (assistant) => `${assistant} is analyzing the repository and enriching the files…`,
     enrichCacheHit: "Reusing verified enrichment: the repository and accepted outputs are unchanged.",
     enrichBudget: (timeoutSeconds, attempts) =>

@@ -50,6 +50,7 @@ The scanner is bounded by `scanMaxDepth` and `scanMaxFiles`. Machine-readable ou
 includes `scanStats` (`files`, `durationMs`, `truncated`) and `scanWarnings`, making slow
 or incomplete discovery visible in CI. Raise a budget deliberately for unusually deep
 monorepos; a truncated scan must not be treated as a complete repository inventory.
-The published CLI runs discovery in a worker thread. `scanStats.mode` reports `worker`,
-`sync`, or `sync-fallback`; `scanWorkerTimeoutSeconds` bounds the worker. If workers are
-unavailable, the deterministic synchronous scanner is retained and emits a warning.
+The published CLI uses the bounded synchronous scanner because process startup is part
+of the product latency budget. `scanStats.mode` reports `sync`, while `scanStats.source`
+reports `git` or `filesystem`. Git inventory is preferred and filesystem traversal is
+the fallback outside a Git worktree.

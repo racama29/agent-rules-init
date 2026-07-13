@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import type {
   RepoSignals,
   PackageJsonManifest,
@@ -27,9 +28,41 @@ export interface ScanOptions {
 interface WalkResult {
   files: string[];
   warnings: string[];
+  source: "git" | "filesystem";
 }
 
-function walk(rootPath: string, options: ScanOptions): WalkResult {
+function listWithGit(rootPath: string, options: ScanOptions): WalkResult | undefined {
+  try {
+    const output = execFileSync(
+      "git",
+      ["-C", rootPath, "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."],
+      { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }
+    );
+    const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+    const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
+    const warnings = new Set<string>();
+    const candidates = output
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => file.split(path.sep).join("/"))
+      .filter((file) => !file.split("/").some((segment) => IGNORED_DIRS.has(segment)))
+      .filter((file) => !path.posix.basename(file).includes(".generated."))
+      .sort((a, b) => a.localeCompare(b));
+    const withinDepth = candidates.filter((file) => {
+      const accepted = file.split("/").length - 1 <= maxDepth;
+      if (!accepted) warnings.add(`Repository scan reached maxDepth=${maxDepth}; some nested files were skipped.`);
+      return accepted;
+    });
+    if (withinDepth.length > maxFiles) {
+      warnings.add(`Repository scan reached maxFiles=${maxFiles}; remaining files were skipped.`);
+    }
+    return { files: withinDepth.slice(0, maxFiles), warnings: [...warnings], source: "git" };
+  } catch {
+    return undefined;
+  }
+}
+
+function walkFilesystem(rootPath: string, options: ScanOptions): WalkResult {
   const results: string[] = [];
   const warnings = new Set<string>();
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
@@ -64,7 +97,11 @@ function walk(rootPath: string, options: ScanOptions): WalkResult {
     }
   }
   recurse(rootPath, 0);
-  return { files: results, warnings: [...warnings] };
+  return { files: results, warnings: [...warnings], source: "filesystem" };
+}
+
+function walk(rootPath: string, options: ScanOptions): WalkResult {
+  return listWithGit(rootPath, options) ?? walkFilesystem(rootPath, options);
 }
 
 // Windows editors (Notepad, PowerShell's Set-Content, some IDE defaults) save UTF-8
@@ -350,6 +387,7 @@ export function scanRepo(rootPath: string, options: ScanOptions = {}): RepoSigna
     durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
     truncated: walked.warnings.length > 0,
     mode: "sync" as const,
+    source: walked.source,
   };
   return {
     rootPath,
