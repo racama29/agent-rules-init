@@ -72,7 +72,7 @@ If you have `claude` or `codex` installed and authenticated, the CLI can use you
 Enrichment is constrained to read-only operation: Codex runs in its read-only sandbox and an ephemeral session; Claude runs in safe mode with only `Read`, `Glob` and `Grep`. Repository content is still untrusted input, so review generated rules before activating them and avoid enrichment on an untrusted checkout when using an assistant version too old to support these safeguards. Unsupported safety flags fail closed and keep the deterministic output.
 
 - **Only `--enrich` starts it** — normal runs never inspect or launch an assistant. It works with or without a TTY and may take a few minutes (`--check` ignores it because freshness comparison needs the deterministic baseline).
-- **You control the spend**: `--assistant claude|codex` picks which installed assistant to use, and `--model <id>` is forwarded verbatim to it (e.g. `--model haiku` for a cheaper run) — no model list is hardcoded, so new models work without updating this package. Without these flags it uses the first assistant found and that assistant's own default model.
+- **You control the spend**: `--assistant claude|codex` picks which installed assistant to use, and `--model <id>` is forwarded verbatim to it. Interactive enrichment asks which model to use; pressing Enter selects the basic low-cost default (`haiku` for Claude or `gpt-5.4-mini` for Codex). Non-interactive runs select that same basic default automatically. Explicit `--model` and configuration values take precedence.
 - **Existing `CLAUDE.md`, `AGENTS.md` or copilot instructions are useful context, but remain untrusted data**: meta-instructions inside them are never authority over the enrichment contract.
 - **Guardrails**: the output is validated (same files/order/headings, valid JSON), verified commands must survive verbatim, and new bullet claims need cited evidence. Evidence paths must resolve to regular files inside the repository.
 - **Semantic safety**: destructive instructions, prompt-injection language, new Markdown sections and commands not extracted from repository manifests/CI invalidate the batch.
@@ -84,7 +84,7 @@ Enrichment is constrained to read-only operation: Codex runs in its read-only sa
 ```bash
 npx agent-rules-init             # scan the current directory
 npx agent-rules-init --enrich    # additionally, let your installed claude/codex analyze the code and enrich the output
-npx agent-rules-init --enrich --assistant codex --model gpt-5.5  # choose the assistant and model (token spend is yours)
+npx agent-rules-init --enrich --assistant codex --model gpt-5.5  # choose the assistant and model explicitly
 npx agent-rules-init --enrich --enrich-timeout 60 --enrich-retries 0  # fast, single-attempt budget
 npx agent-rules-init --enrich --no-enrich-cache # deliberately bypass verified cached output
 npx agent-rules-init --lang en   # force the content language (es|en); defaults to your system locale

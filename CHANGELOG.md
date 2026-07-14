@@ -11,6 +11,7 @@ All notable changes to this project are documented here. The format follows
 - An explicit maintainer-context interview for project purpose, priorities, assistant autonomy, boundaries and current tasks.
 - Validated portable context files plus ignored local task state for repeatable, personalized generation.
 - Separate maintainer-intent/task sections in consumer documents and enrichment validation that preserves those statements verbatim.
+- Interactive model selection for enrichment, with the basic low-cost model selected by default in both interactive and automated runs.
 
 ## [0.8.1] - 2026-07-13
 

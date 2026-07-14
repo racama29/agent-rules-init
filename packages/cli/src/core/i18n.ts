@@ -88,6 +88,7 @@ export interface UiTexts {
   fileAlreadyApplied: (path: string) => string;
   assistantNotAvailable: (assistant: string) => string;
   enrichWorking: (assistant: string) => string;
+  enrichModelQuestion: (assistant: string, defaultModel: string) => string;
   enrichCacheHit: string;
   enrichBudget: (timeoutSeconds: number, attempts: number) => string;
   enrichDone: string;
@@ -144,7 +145,7 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
   --context-file <ruta> usa contexto estructurado de un YAML externo en esta ejecución
   --enrich          fuerza el enriquecimiento con IA sin preguntar (también sin TTY; combinable con --non-interactive)
   --assistant <id>  elige el asistente para enriquecer: claude o codex (por defecto, el primero instalado)
-  --model <modelo>  modelo a usar, pasado tal cual al asistente (p. ej. haiku, gpt-5.5); por defecto, el del asistente
+  --model <modelo>  modelo a usar, pasado tal cual al asistente; sin valor usa el modelo básico recomendado
   --enrich-timeout <s> tiempo máximo por intento, entre 10 y 3600 segundos (por defecto, 300)
   --enrich-retries <n> reintentos de validación, entre 0 y 2 (por defecto, 1)
   --no-enrich-cache ignora la caché verificada y vuelve a ejecutar el asistente`,
@@ -166,6 +167,8 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
     assistantNotAvailable: (assistant) =>
       `Se pidió ${assistant} con --assistant pero no está instalado; se conserva la versión generada.`,
     enrichWorking: (assistant) => `${assistant} está analizando el repositorio y enriqueciendo los archivos…`,
+    enrichModelQuestion: (assistant, defaultModel) =>
+      `¿Qué modelo quieres usar con ${assistant}? Pulsa Enter para usar el modelo básico (${defaultModel}).`,
     enrichCacheHit: "Se reutiliza el enriquecimiento verificado: el repositorio y las salidas no han cambiado.",
     enrichBudget: (timeoutSeconds, attempts) =>
       `Presupuesto de latencia: hasta ${attempts} intento(s) de ${timeoutSeconds} s por lote.`,
@@ -270,7 +273,7 @@ review their content and run --apply to activate them with safe backups.`,
   --context-file <path> use structured context from an external YAML file for this run
   --enrich          force AI enrichment without asking (works without a TTY; composable with --non-interactive)
   --assistant <id>  pick the enrichment assistant: claude or codex (defaults to the first one installed)
-  --model <model>   model to use, forwarded verbatim to the assistant (e.g. haiku, gpt-5.5); defaults to the assistant's own
+  --model <model>   model to use, forwarded verbatim to the assistant; without one, the basic recommended model is used
   --enrich-timeout <s> maximum time per attempt, from 10 to 3600 seconds (default: 300)
   --enrich-retries <n> validation retries, from 0 to 2 (default: 1)
   --no-enrich-cache bypass verified cached enrichment and run the assistant again`,
@@ -292,6 +295,8 @@ review their content and run --apply to activate them with safe backups.`,
     assistantNotAvailable: (assistant) =>
       `${assistant} was requested with --assistant but is not installed; keeping the generated version.`,
     enrichWorking: (assistant) => `${assistant} is analyzing the repository and enriching the files…`,
+    enrichModelQuestion: (assistant, defaultModel) =>
+      `Which model should ${assistant} use? Press Enter to use the basic model (${defaultModel}).`,
     enrichCacheHit: "Reusing verified enrichment: the repository and accepted outputs are unchanged.",
     enrichBudget: (timeoutSeconds, attempts) =>
       `Latency budget: up to ${attempts} attempt(s) of ${timeoutSeconds}s per batch.`,

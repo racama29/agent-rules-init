@@ -48,6 +48,12 @@ export type { CliAction, CliRunOptions } from "./core/cli-options.js";
 
 const DEFAULT_ENRICH_TIMEOUT_MS = 300_000;
 
+/** Stable low-cost defaults. Explicit --model/config values always take precedence. */
+export const BASIC_ASSISTANT_MODELS: Record<AssistantId, string> = {
+  claude: "haiku",
+  codex: "gpt-5.4-mini",
+};
+
 function maintainerStatements(intent?: MaintainerIntent, task?: TaskContext): string[] {
   return [
     intent?.purpose,
@@ -214,7 +220,20 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
       const chosenAssistant = requested ?? assistants[0];
       {
         const existingDocs = readExistingDocs(rootPath);
-        const model = options.model ?? config.model;
+        let model = options.model ?? config.model;
+        if (!model) {
+          const basicModel = BASIC_ASSISTANT_MODELS[chosenAssistant];
+          if (interactiveOutput && enrichClack) {
+            const selected = await enrichClack.text({
+              message: ui.enrichModelQuestion(chosenAssistant, basicModel),
+              initialValue: basicModel,
+              placeholder: basicModel,
+            });
+            model = enrichClack.isCancel(selected) || !selected.trim() ? basicModel : selected.trim();
+          } else {
+            model = basicModel;
+          }
+        }
         const requestedState = makeEnrichmentState(
           rootPath, signals.files, baselineHash, existingDocs, chosenAssistant, model
         );

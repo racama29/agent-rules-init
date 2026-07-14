@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { createInterviewIo, runCli, resolveCliAction, getVersion, main } from "../src/cli.js";
+import { BASIC_ASSISTANT_MODELS, createInterviewIo, runCli, resolveCliAction, getVersion, main } from "../src/cli.js";
 import type { GeneratedFile } from "../src/core/writer.js";
 import type { RepoFacts } from "../src/core/types.js";
 
@@ -536,6 +536,29 @@ describe("runCli", () => {
 
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("ENRIQUECIDO");
+  });
+
+  it("uses the basic Claude model by default in non-interactive enrichment", async () => {
+    const execFn = makeEnrichExecFn();
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true });
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
+    expect(BASIC_ASSISTANT_MODELS.claude).toBe("haiku");
+    expect(enrichCall?.[1]).toContain("--model");
+    expect(enrichCall?.[1]).toContain("haiku");
+  });
+
+  it("uses the basic Codex model by default when no model is configured", async () => {
+    const execFn = vi.fn().mockImplementation(async (command: string, args: string[], stdin?: string) => {
+      if (args[0] === "--version") return command === "codex"
+        ? { stdout: "1.0.0", exitCode: 0 }
+        : Promise.reject(new Error("not installed"));
+      const filesJson = promptFilesJson(stdin!);
+      return { stdout: filesJson, exitCode: 0 };
+    });
+    await runCli(tmpDir, { execFn, nonInteractive: true, enrich: true, assistant: "codex" });
+    const enrichCall = execFn.mock.calls.find((call) => call[1][0] !== "--version");
+    expect(enrichCall?.[1]).toContain("--model");
+    expect(enrichCall?.[1]).toContain(BASIC_ASSISTANT_MODELS.codex);
   });
 
   it("spawns the assistant at the target repo root during enrichment", async () => {
