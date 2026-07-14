@@ -125,6 +125,24 @@ describe("enrichFilesWithAssistant", () => {
     expect(execFn.mock.calls[0][2]).toContain("`npm test`");
   });
 
+  it("preserves maintainer-provided context verbatim during enrichment", async () => {
+    const contextual = [
+      { path: "CLAUDE.generated.md", content: "## Maintainer-provided project intent\n\n- Purpose: Keep the public API stable" },
+    ];
+    const changed = [{ ...contextual[0], content: "## Maintainer-provided project intent\n\n- Purpose: Improve the API" }];
+    const execFn = vi.fn().mockResolvedValue({ stdout: JSON.stringify(changed), exitCode: 0 });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(enrichFilesWithAssistant("claude", contextual, {
+      execFn,
+      lang: "en",
+      maxAttempts: 1,
+      protectedStatements: ["Keep the public API stable"],
+    })).resolves.toEqual(contextual);
+    expect(execFn.mock.calls[0][2]).toContain("trusted maintainer statements");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("maintainer-provided context"));
+    warn.mockRestore();
+  });
+
   it("accepts JSON preceded by assistant prose", async () => {
     const execFn = vi.fn().mockResolvedValue({
       stdout: `He investigado el repositorio y aquí está el resultado:\n\n${JSON.stringify(files)}`,

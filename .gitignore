@@ -8,3 +8,4 @@ build/
 .claude/
 .npmrc
 DEVNOTES.md
+.agent-rules-init/

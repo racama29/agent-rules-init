@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import type { Lang } from "./i18n.js";
+import type { MaintainerIntent } from "./types.js";
+import { validateMaintainerIntent } from "./project-context.js";
 
 const require = createRequire(import.meta.url);
 let yamlParse: ((source: string) => unknown) | undefined;
@@ -16,6 +18,7 @@ const ROOT_KEYS = new Set([
   "enrichCache", "enrichTimeoutSeconds",
   "enrichRetries",
   "scanMaxDepth", "scanMaxFiles",
+  "intent",
 ]);
 const PROJECT_KEYS = ["framework", "testRunner", "linter", "packageManager"] as const;
 const PROJECT_KEY_SET: ReadonlySet<string> = new Set(PROJECT_KEYS);
@@ -44,6 +47,8 @@ export interface AgentRulesConfig {
   scanMaxDepth?: number;
   /** Maximum files collected before stopping the repository scan (100..1,000,000). */
   scanMaxFiles?: number;
+  /** Durable statements supplied by the repository maintainer. */
+  intent?: MaintainerIntent;
 }
 
 export interface LoadedConfig {
@@ -150,6 +155,9 @@ function validateConfig(value: unknown, configPath: string, warnings: string[]):
 
   const projects = validateProjects(value.projects, warnings);
   if (projects !== undefined) config.projects = projects;
+
+  const intent = validateMaintainerIntent(value.intent, warnings, "intent");
+  if (intent !== undefined) config.intent = intent;
 
   if (value.noAi !== undefined) {
     if (typeof value.noAi === "boolean") config.noAi = value.noAi;

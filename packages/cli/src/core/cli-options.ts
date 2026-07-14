@@ -15,6 +15,8 @@ export interface CliRunOptions {
   enrichTimeoutSeconds?: number;
   noEnrichCache?: true;
   enrichRetries?: number;
+  interview?: true;
+  contextFile?: string;
 }
 
 export type CliAction =
@@ -56,6 +58,11 @@ export function resolveCliAction(argv: string[]): CliAction {
       if (!value) return { kind: "missing-value", flag: "--model" };
       options.model = value; continue;
     }
+    if (argument === "--context-file" || argument.startsWith("--context-file=")) {
+      const [value, consumed] = optionValue(argv, index, "--context-file"); index = consumed;
+      if (!value) return { kind: "missing-value", flag: "--context-file" };
+      options.contextFile = value; continue;
+    }
     if (argument === "--enrich-timeout" || argument.startsWith("--enrich-timeout=")) {
       const [value, consumed] = optionValue(argv, index, "--enrich-timeout"); index = consumed;
       const parsed = Number(value);
@@ -72,6 +79,7 @@ export function resolveCliAction(argv: string[]): CliAction {
       "--dry-run": "dryRun", "--force": "force", "--apply": "apply", "--check": "check",
       "--json": "json", "--non-interactive": "nonInteractive", "--enrich": "enrich",
       "--no-enrich-cache": "noEnrichCache",
+      "--interview": "interview",
     };
     const key = booleanOptions[argument];
     if (key) { Object.assign(options, { [key]: true }); continue; }

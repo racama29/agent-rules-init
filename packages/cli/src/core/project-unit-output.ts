@@ -34,6 +34,6 @@ export function renderProjectUnitAgents(
   const ruleSet = jsTsPack.rules(detection, lang, { facts, signals: unit.signals });
   return {
     path: `${unit.path}/AGENTS.generated.md`,
-    content: renderAgentsMd([{ detection, ruleSet }], facts, lang),
+    content: renderAgentsMd([{ detection, ruleSet }], { facts }, lang),
   };
 }

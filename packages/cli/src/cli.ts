@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import type { MultiSelectOptions, SelectOptions } from "@clack/prompts";
 import { scanRepo } from "./core/scanner.js";
 import { writeGeneratedFiles, type GeneratedFile, type WriteResult } from "./core/writer.js";
 import {
@@ -20,6 +21,7 @@ import { renderProjectUnitAgents } from "./core/project-unit-output.js";
 import { hasInteractiveTty } from "./core/prompt-engine.js";
 import type { AssistantId, EnrichMetrics, ExecFn } from "./core/llm-bridge.js";
 import type { RepoFacts, RepoSignals } from "./core/types.js";
+import type { MaintainerIntent, TaskContext } from "./core/types.js";
 import {
   hashGeneratedFiles,
   makeGenerationState,
@@ -32,10 +34,33 @@ import { applyGeneratedFiles, type ActivationResult } from "./core/activation.js
 import { loadCandidatePacks } from "./packs/index.js";
 import { readExistingDocs } from "./core/existing-docs.js";
 import { resolveCliAction } from "./core/cli-options.js";
+import type { InterviewIo, InterviewOption } from "./core/interview.js";
+import {
+  loadContextFile,
+  loadTaskContext,
+  makeProjectContext,
+  saveMaintainerIntent,
+  saveTaskContext,
+} from "./core/project-context.js";
 export { resolveCliAction } from "./core/cli-options.js";
 export type { CliAction, CliRunOptions } from "./core/cli-options.js";
 
 const DEFAULT_ENRICH_TIMEOUT_MS = 300_000;
+
+function maintainerStatements(intent?: MaintainerIntent, task?: TaskContext): string[] {
+  return [
+    intent?.purpose,
+    ...(intent?.priorities ?? []),
+    ...(intent?.assistantRoles ?? []),
+    ...(intent?.boundaries ?? []),
+    ...(intent?.doneCriteria ?? []),
+    ...(intent?.decisions ?? []),
+    task?.goal,
+    ...(task?.successCriteria ?? []),
+    ...(task?.allowedPaths ?? []),
+    ...(task?.restrictions ?? []),
+  ].filter((value): value is string => Boolean(value));
+}
 
 export interface RunCliOptions {
   execFn?: ExecFn;
@@ -59,6 +84,10 @@ export interface RunCliOptions {
   noEnrichCache?: boolean;
   /** Number of retries after the first assistant attempt (0..2). */
   enrichRetries?: number;
+  /** Maintainer context supplied by interview or portable context file. */
+  intent?: MaintainerIntent;
+  /** Current task supplied for this run or loaded from the local task file. */
+  task?: TaskContext;
   /** Receives the rendered files before they are written (or planned). */
   onGeneratedFiles?: (files: readonly GeneratedFile[]) => void;
   /** Receives the deterministic generation fingerprint before optional enrichment. */
@@ -101,6 +130,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const detections = rawDetections;
   const facts = buildRepoFacts(signals, lang);
   options.onFacts?.(facts);
+  const projectContext = makeProjectContext(facts, config, options.task, options.intent);
   const ctx = { facts, signals };
 
   const detectedPacks = new Map(candidatePacks.map((pack) => [pack.id, pack]));
@@ -112,20 +142,20 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
   const files: { path: string; content: string }[] = [];
 
   if (entries.length > 0) {
-    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries, facts, lang) });
-    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries, facts, lang) });
+    files.push({ path: "CLAUDE.generated.md", content: renderClaudeMd(entries, projectContext, lang) });
+    files.push({ path: "AGENTS.generated.md", content: renderAgentsMd(entries, projectContext, lang) });
     files.push({
       path: ".github/copilot-instructions.generated.md",
-      content: renderCopilotInstructions(entries, facts, lang),
+      content: renderCopilotInstructions(entries, projectContext, lang),
     });
     files.push({
       path: ".cursor/rules/repository.generated.mdc",
-      content: renderCursorRules(entries, facts, lang),
+      content: renderCursorRules(entries, projectContext, lang),
     });
-    files.push({ path: "GEMINI.generated.md", content: renderGeminiMd(entries, facts, lang) });
+    files.push({ path: "GEMINI.generated.md", content: renderGeminiMd(entries, projectContext, lang) });
     for (const detection of detections) {
       const pack = detectedPacks.get(detection.packId)!;
-      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx), facts, lang)) {
+      for (const file of renderPromptFiles(detection.packId, pack.promptTemplates(detection, lang, ctx), projectContext, lang)) {
         files.push(file);
       }
     }
@@ -133,17 +163,17 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
     const withFallback = (content: string) =>
       content.replace(ui.generatedHeader, `${ui.generatedHeader}\n\n${ui.noStackFallback}`);
     files.push(
-      { path: "CLAUDE.generated.md", content: withFallback(renderClaudeMd([], facts, lang)) },
-      { path: "AGENTS.generated.md", content: withFallback(renderAgentsMd([], facts, lang)) },
+      { path: "CLAUDE.generated.md", content: withFallback(renderClaudeMd([], projectContext, lang)) },
+      { path: "AGENTS.generated.md", content: withFallback(renderAgentsMd([], projectContext, lang)) },
       {
         path: ".github/copilot-instructions.generated.md",
-        content: withFallback(renderCopilotInstructions([], facts, lang)),
+        content: withFallback(renderCopilotInstructions([], projectContext, lang)),
       },
       {
         path: ".cursor/rules/repository.generated.mdc",
-        content: withFallback(renderCursorRules([], facts, lang)),
+        content: withFallback(renderCursorRules([], projectContext, lang)),
       },
-      { path: "GEMINI.generated.md", content: withFallback(renderGeminiMd([], facts, lang)) }
+      { path: "GEMINI.generated.md", content: withFallback(renderGeminiMd([], projectContext, lang)) }
     );
   }
 
@@ -228,6 +258,7 @@ export async function runCli(rootPath: string, options: RunCliOptions = {}): Pro
             lang,
             cwd: rootPath,
             mustKeep: verifiedCommands,
+            protectedStatements: maintainerStatements(projectContext.intent, projectContext.task),
             existingDocs,
             model,
             maxAttempts: retries + 1,
@@ -330,22 +361,107 @@ export async function main(): Promise<void> {
   const machineOutput = action.json === true;
   const planningOnly = action.dryRun === true || action.check === true;
   const nonInteractive = action.nonInteractive === true || machineOutput || planningOnly || action.apply === true;
+  if (action.interview && nonInteractive) {
+    console.error("--interview requires an interactive terminal and cannot be combined with --json, --non-interactive, --check, --dry-run or --apply.");
+    process.exitCode = 1;
+    return;
+  }
+  if (action.interview && !hasInteractiveTty()) {
+    console.error("--interview requires an interactive terminal.");
+    process.exitCode = 1;
+    return;
+  }
   // Enrichment output is non-deterministic, so --check (freshness comparison) must stay
   // on the deterministic baseline.
   const clack = machineOutput ? undefined : await import("@clack/prompts");
   if (clack) clack.intro("agent-rules-init");
 
   try {
-    const loadedConfig = loadConfig(process.cwd());
+    let loadedConfig = loadConfig(process.cwd());
     const apply = action.apply === true && action.check !== true && action.dryRun !== true;
     const enrich = action.enrich === true && action.check !== true && !(apply && action.force !== true);
     const lang = action.lang ?? loadedConfig.config.lang ?? defaultLang;
     ui = UI[lang];
+    let sessionIntent: MaintainerIntent | undefined;
+    let sessionTask: TaskContext | undefined;
+    const contextWarnings: string[] = [];
+    if (action.contextFile) {
+      const external = loadContextFile(path.resolve(process.cwd(), action.contextFile));
+      sessionIntent = external.intent;
+      sessionTask = external.task;
+      contextWarnings.push(...external.warnings);
+    } else {
+      const localTask = loadTaskContext(process.cwd());
+      sessionTask = localTask.task;
+      contextWarnings.push(...localTask.warnings);
+    }
+    if (action.interview) {
+      const { runContextInterview } = await import("./core/interview.js");
+      const previewSignals = scanRepo(process.cwd(), {
+        maxDepth: loadedConfig.config.scanMaxDepth,
+        maxFiles: loadedConfig.config.scanMaxFiles,
+      });
+      const previewPacks = await loadCandidatePacks(previewSignals);
+      const stacks = previewPacks
+        .map((pack) => pack.detect(previewSignals))
+        .filter((value): value is NonNullable<typeof value> => value !== null)
+        .map((detection) => detection.language);
+      const previewFacts = buildRepoFacts(previewSignals, lang);
+      const interviewIo: InterviewIo = {
+        async select<T extends string>(options: {
+          message: string; options: InterviewOption<T>[]; initialValue?: T;
+        }) {
+          const value = await clack!.select<T>(options as SelectOptions<T>);
+          return clack!.isCancel(value) ? undefined : value;
+        },
+        async multiselect<T extends string>(options: {
+          message: string; options: InterviewOption<T>[]; initialValues?: T[]; maxItems?: number; required?: boolean;
+        }) {
+          const value = await clack!.multiselect<T>(options as MultiSelectOptions<T>);
+          return clack!.isCancel(value) ? undefined : value;
+        },
+        text: async (options) => {
+          const value = await clack!.text({
+            message: options.message, placeholder: options.placeholder, initialValue: options.initialValue,
+            validate: (input) => {
+              if (options.required && !input.trim()) return lang === "es" ? "Esta respuesta es obligatoria." : "This answer is required.";
+              if (options.minLength && input.trim().length < options.minLength) {
+                return lang === "es" ? `Escribe al menos ${options.minLength} caracteres.` : `Enter at least ${options.minLength} characters.`;
+              }
+              return undefined;
+            },
+          });
+          return clack!.isCancel(value) ? undefined : value;
+        },
+        confirm: async (options) => {
+          const value = await clack!.confirm(options);
+          return clack!.isCancel(value) ? undefined : value;
+        },
+        note: (message, title) => clack!.note(message, title),
+      };
+      const interview = await runContextInterview(interviewIo, lang, {
+        stacks: [...new Set(stacks)],
+        canonicalCommands: previewFacts.canonical
+          .filter((command) => command.confidence === "high")
+          .map((command) => command.command),
+      }, sessionIntent ?? loadedConfig.config.intent);
+      if (interview.cancelled) {
+        clack!.cancel(ui.cancelled);
+        return;
+      }
+      if (interview.intent) {
+        saveMaintainerIntent(process.cwd(), interview.intent);
+        sessionIntent = interview.intent;
+        loadedConfig = loadConfig(process.cwd());
+      }
+      sessionTask = interview.task;
+      if (interview.task && interview.persistTask) saveTaskContext(process.cwd(), interview.task);
+    }
     if (action.enrich === true && action.check === true) console.warn(ui.enrichIgnoredWithCheck);
     if (action.force === true && action.check === true) console.warn(ui.forceIgnoredWithCheck);
     if (action.apply === true && !apply) console.warn(ui.applyIgnoredWithPlanning);
     if (!machineOutput) {
-      for (const warning of loadedConfig.warnings) console.warn(warning);
+      for (const warning of [...loadedConfig.warnings, ...contextWarnings]) console.warn(warning);
     }
     let generatedFiles: readonly GeneratedFile[] = [];
     let repoFacts: RepoFacts | undefined;
@@ -366,6 +482,8 @@ export async function main(): Promise<void> {
       enrichTimeoutSeconds: action.enrichTimeoutSeconds ?? loadedConfig.config.enrichTimeoutSeconds,
       noEnrichCache: action.noEnrichCache === true,
       enrichRetries: action.enrichRetries ?? loadedConfig.config.enrichRetries,
+      intent: sessionIntent,
+      task: sessionTask,
       onGeneratedFiles: (files) => {
         generatedFiles = files;
       },
@@ -406,7 +524,7 @@ export async function main(): Promise<void> {
       console.log(
         JSON.stringify({
           mode: action.check ? "check" : action.dryRun ? "dry-run" : apply ? "apply" : "write",
-          configWarnings: loadedConfig.warnings,
+          configWarnings: [...loadedConfig.warnings, ...contextWarnings],
           scanWarnings,
           scanStats,
           facts: repoFacts,

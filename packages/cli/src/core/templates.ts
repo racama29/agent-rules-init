@@ -1,5 +1,14 @@
 import { UI, type Lang } from "./i18n.js";
-import type { DetectionResult, EvidenceFact, PromptTemplate, RepoFacts, RuleSet } from "./types.js";
+import type {
+  DetectionResult,
+  EvidenceFact,
+  MaintainerIntent,
+  ProjectContext,
+  PromptTemplate,
+  RepoFacts,
+  RuleSet,
+  TaskContext,
+} from "./types.js";
 import { SOURCE_FILES } from "./canonical-commands.js";
 
 export interface RenderEntry {
@@ -85,6 +94,92 @@ function renderCanonical(facts: RepoFacts, lang: Lang): string {
   ].join("\n");
 }
 
+type ContextDetail = "full" | "concise";
+
+function renderMaintainerIntent(
+  intent: MaintainerIntent | undefined,
+  lang: Lang,
+  detail: ContextDetail
+): string {
+  if (!intent) return "";
+  const labels = lang === "es"
+    ? {
+      title: "Intención del proyecto declarada por el mantenedor",
+      purpose: "Propósito",
+      priorities: "Prioridades",
+      roles: "Trabajo esperado de la IA",
+      autonomy: "Autonomía",
+      boundaries: "Límites",
+      done: "Criterios de finalización",
+      decisions: "Decisiones deliberadas",
+    }
+    : {
+      title: "Maintainer-provided project intent",
+      purpose: "Purpose",
+      priorities: "Priorities",
+      roles: "Expected assistant work",
+      autonomy: "Autonomy",
+      boundaries: "Boundaries",
+      done: "Done criteria",
+      decisions: "Deliberate decisions",
+    };
+  const lines = [
+    `- ${labels.purpose}: ${intent.purpose}`,
+    ...(intent.priorities.length > 0 ? [`- ${labels.priorities}: ${intent.priorities.join("; ")}`] : []),
+    ...(intent.boundaries.length > 0 ? [`- ${labels.boundaries}: ${intent.boundaries.join("; ")}`] : []),
+  ];
+  if (detail === "full") {
+    if (intent.assistantRoles.length > 0) lines.push(`- ${labels.roles}: ${intent.assistantRoles.join("; ")}`);
+    lines.push(`- ${labels.autonomy}: ${intent.autonomy}`);
+    if (intent.doneCriteria.length > 0) lines.push(`- ${labels.done}: ${intent.doneCriteria.join("; ")}`);
+    if (intent.decisions.length > 0) lines.push(`- ${labels.decisions}: ${intent.decisions.join("; ")}`);
+  }
+  return [`## ${labels.title}`, "", ...lines].join("\n");
+}
+
+function renderCurrentTask(
+  task: TaskContext | undefined,
+  lang: Lang,
+  detail: ContextDetail
+): string {
+  if (!task) return "";
+  const labels = lang === "es"
+    ? {
+      title: "Tarea actual declarada por el mantenedor",
+      goal: "Objetivo",
+      success: "Criterios de éxito",
+      scope: "Alcance permitido",
+      fallback: "Decisiones imprevistas",
+      restrictions: "Restricciones",
+    }
+    : {
+      title: "Current task provided by the maintainer",
+      goal: "Goal",
+      success: "Success criteria",
+      scope: "Allowed scope",
+      fallback: "Unforeseen decisions",
+      restrictions: "Restrictions",
+    };
+  const lines = [
+    `- ${labels.goal}: ${task.goal}`,
+    ...(task.allowedPaths.length > 0 ? [`- ${labels.scope}: ${task.allowedPaths.join("; ")}`] : []),
+    ...(task.restrictions.length > 0 ? [`- ${labels.restrictions}: ${task.restrictions.join("; ")}`] : []),
+  ];
+  if (detail === "full") {
+    if (task.successCriteria.length > 0) lines.push(`- ${labels.success}: ${task.successCriteria.join("; ")}`);
+    lines.push(`- ${labels.fallback}: ${task.fallback}`);
+  }
+  return [`## ${labels.title}`, "", ...lines].join("\n");
+}
+
+function renderHumanContext(context: ProjectContext | undefined, lang: Lang, detail: ContextDetail): string[] {
+  if (!context) return [];
+  return [
+    renderMaintainerIntent(context.intent, lang, detail),
+    renderCurrentTask(context.task, lang, detail),
+  ].filter(Boolean);
+}
+
 export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
   const ui = UI[lang];
   const sections: string[] = [];
@@ -125,8 +220,8 @@ export function renderRepoFacts(facts: RepoFacts, lang: Lang): string {
   return sections.join("\n\n");
 }
 
-function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  const factsBlock = facts ? renderRepoFacts(facts, lang) : "";
+function renderDocument(title: string, entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
+  const factsBlock = context ? renderRepoFacts(context.facts, lang) : "";
   return [
     title,
     "",
@@ -134,14 +229,15 @@ function renderDocument(title: string, entries: RenderEntry[], facts: RepoFacts 
     "",
     renderSection(entries, lang),
     ...(factsBlock ? ["", factsBlock] : []),
+    ...renderHumanContext(context, lang, "full").flatMap((block) => ["", block]),
   ].join("\n");
 }
 
-export function renderClaudeMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
-  return renderDocument("# CLAUDE.md", entries, facts, lang);
+export function renderClaudeMd(entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
+  return renderDocument("# CLAUDE.md", entries, context, lang);
 }
 
-export function renderAgentsMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+export function renderAgentsMd(entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
   const intro = lang === "es"
     ? "Reglas operativas para modificar este repositorio. Respeta el alcance y valida los cambios con los comandos indicados."
     : "Operational rules for modifying this repository. Respect scope and validate changes with the commands below.";
@@ -149,16 +245,17 @@ export function renderAgentsMd(entries: RenderEntry[], facts: RepoFacts | undefi
     "# AGENTS.md", "", UI[lang].generatedHeader, "", intro, "",
     renderSection(entries, lang),
   ];
-  if (facts) {
-    const canonical = renderCanonical(facts, lang);
-    const architecture = renderEvidenceSection(architectureFactsTitle(lang), facts.architectureFacts ?? [], lang);
-    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+  if (context) {
+    const canonical = renderCanonical(context.facts, lang);
+    const architecture = renderEvidenceSection(architectureFactsTitle(lang), context.facts.architectureFacts ?? [], lang);
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), context.facts.conventionFacts ?? [], lang);
     for (const block of [canonical, architecture, conventions]) if (block) blocks.push("", block);
   }
+  for (const block of renderHumanContext(context, lang, "full")) blocks.push("", block);
   return blocks.join("\n");
 }
 
-export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+export function renderCopilotInstructions(entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
   const intro = lang === "es"
     ? "Aplica estas convenciones al completar y modificar código. Omite tareas operativas de terminal salvo que sean necesarias para el cambio."
     : "Apply these conventions when completing and modifying code. Omit terminal operations unless the change requires them.";
@@ -166,15 +263,16 @@ export function renderCopilotInstructions(entries: RenderEntry[], facts: RepoFac
     "# Copilot Instructions", "", UI[lang].generatedHeader, "", intro, "",
     renderSection(entries, lang, { operationalConventions: false, architectureDefaults: false }),
   ];
-  if (facts) {
-    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
-    const architecture = renderEvidenceSection(architectureFactsTitle(lang), facts.architectureFacts ?? [], lang);
+  if (context) {
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), context.facts.conventionFacts ?? [], lang);
+    const architecture = renderEvidenceSection(architectureFactsTitle(lang), context.facts.architectureFacts ?? [], lang);
     for (const block of [conventions, architecture]) if (block) blocks.push("", block);
   }
+  for (const block of renderHumanContext(context, lang, "concise")) blocks.push("", block);
   return blocks.join("\n");
 }
 
-export function renderCursorRules(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+export function renderCursorRules(entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
   const intro = lang === "es"
     ? "Reglas breves que Cursor debe aplicar siempre al editar este repositorio."
     : "Concise rules Cursor should always apply while editing this repository.";
@@ -187,50 +285,62 @@ export function renderCursorRules(entries: RenderEntry[], facts: RepoFacts | und
     "# Repository rules", "", UI[lang].generatedHeader, "", intro, "",
     renderSection(entries, lang, { summaries: false, architectureDefaults: false }),
   ];
-  if (facts) {
-    const canonical = renderCanonical(facts, lang);
-    const conventions = renderEvidenceSection(localConventionsTitle(lang), facts.conventionFacts ?? [], lang);
+  if (context) {
+    const canonical = renderCanonical(context.facts, lang);
+    const conventions = renderEvidenceSection(localConventionsTitle(lang), context.facts.conventionFacts ?? [], lang);
     for (const block of [canonical, conventions]) if (block) blocks.push("", block);
   }
+  for (const block of renderHumanContext(context, lang, "concise")) blocks.push("", block);
   return blocks.join("\n");
 }
 
-export function renderGeminiMd(entries: RenderEntry[], facts: RepoFacts | undefined, lang: Lang): string {
+export function renderGeminiMd(entries: RenderEntry[], context: ProjectContext | undefined, lang: Lang): string {
   const intro = lang === "es"
     ? "Contexto de proyecto para investigar, implementar y verificar cambios con Gemini CLI."
     : "Project context for investigating, implementing and verifying changes with Gemini CLI.";
-  const factsBlock = facts ? renderRepoFacts(facts, lang) : "";
+  const factsBlock = context ? renderRepoFacts(context.facts, lang) : "";
   return [
     "# GEMINI.md", "", UI[lang].generatedHeader, "", intro, "",
     renderSection(entries, lang, { operationalConventions: false }),
     ...(factsBlock ? ["", factsBlock] : []),
+    ...renderHumanContext(context, lang, "full").flatMap((block) => ["", block]),
   ].join("\n");
 }
 
 export function renderPromptFiles(
   packId: string,
   templates: PromptTemplate[],
-  facts: RepoFacts,
+  projectContext: ProjectContext,
   lang: Lang
 ): { path: string; content: string }[] {
+  const { facts } = projectContext;
   const canonical = facts.canonical.filter((item) => item.confidence === "high");
   const architecture = (facts.architectureFacts ?? []).filter((item) => item.confidence === "high");
   const conventions = (facts.conventionFacts ?? []).filter((item) => item.confidence === "high");
+  const hasIntent = projectContext.intent !== undefined;
+  const hasTask = projectContext.task !== undefined;
   const relevant = templates.filter((template) => {
-    if (template.id === "testing") return canonical.some((item) => item.kind === "test");
-    if (template.id === "refactor") return architecture.length > 0;
-    return canonical.length > 0 || conventions.length > 0;
+    if (template.id === "testing") {
+      return canonical.some((item) => item.kind === "test")
+        || (projectContext.intent?.doneCriteria.length ?? 0) > 0
+        || (projectContext.task?.successCriteria.length ?? 0) > 0;
+    }
+    if (template.id === "refactor") return architecture.length > 0 || hasIntent || hasTask;
+    return canonical.length > 0 || conventions.length > 0 || hasIntent || hasTask;
   });
   const contextLines = [
     ...canonical.slice(0, 3).map((item) => `- ${item.kind}: \`${item.command}\` (${item.source})`),
     ...architecture.slice(0, 2).map((item) => `- ${item.statement} (${evidenceLabel(lang)}: ${item.evidence.map((path) => `\`${path}\``).join(", ")})`),
     ...conventions.slice(0, 2).map((item) => `- ${item.statement} (${evidenceLabel(lang)}: ${item.evidence.map((path) => `\`${path}\``).join(", ")})`),
   ];
-  const context = [
-    lang === "es" ? "## Contexto verificado del repositorio" : "## Verified repository context",
-    "",
-    ...contextLines,
-  ].join("\n");
+  const verifiedContext = contextLines.length > 0
+    ? [
+      lang === "es" ? "## Contexto verificado del repositorio" : "## Verified repository context",
+      "",
+      ...contextLines,
+    ].join("\n")
+    : "";
+  const context = [verifiedContext, ...renderHumanContext(projectContext, lang, "full")].filter(Boolean).join("\n\n");
   return relevant.flatMap((template) => [
     {
       path: `.claude/commands/${packId}-${template.id}.generated.md`,

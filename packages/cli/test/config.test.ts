@@ -136,6 +136,40 @@ projects:
     expect(loadConfig(tmpDir)).toEqual({ config: {}, sourcePath: configPath, warnings: [] });
   });
 
+  it("loads validated maintainer intent from project configuration", () => {
+    writeConfig(`
+intent:
+  purpose: Keep releases stable for CLI users
+  priorities: [correctness, compatibility]
+  assistantRoles: [implementation, testing]
+  autonomy: plan-first
+  boundaries: [Do not break the public API]
+  doneCriteria: [All checks pass]
+  decisions: [Node 18 remains supported]
+`);
+    expect(loadConfig(tmpDir).config.intent).toEqual({
+      purpose: "Keep releases stable for CLI users",
+      priorities: ["correctness", "compatibility"],
+      assistantRoles: ["implementation", "testing"],
+      autonomy: "plan-first",
+      boundaries: ["Do not break the public API"],
+      doneCriteria: ["All checks pass"],
+      decisions: ["Node 18 remains supported"],
+    });
+  });
+
+  it("rejects malformed maintainer intent without accepting partial policy", () => {
+    writeConfig(`
+intent:
+  purpose: 42
+  priorities: correctness
+  autonomy: unlimited
+`);
+    const result = loadConfig(tmpDir);
+    expect(result.config.intent).toBeUndefined();
+    expect(result.warnings).toEqual([expect.stringContaining("intent.purpose")]);
+  });
+
   it("accepts scanner budgets and rejects unsafe values", () => {
     writeConfig("scanMaxDepth: 20\nscanMaxFiles: 250000\n");
     expect(loadConfig(tmpDir).config).toMatchObject({ scanMaxDepth: 20, scanMaxFiles: 250000 });

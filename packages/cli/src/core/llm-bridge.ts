@@ -171,6 +171,8 @@ export interface EnrichOptions {
   cwd?: string;
   /** Commands that must survive verbatim (canonical test/lint/build commands). */
   mustKeep?: readonly string[];
+  /** Maintainer-authored statements that enrichment must preserve verbatim. */
+  protectedStatements?: readonly string[];
   /** Hand-maintained docs already in the repo (CLAUDE.md, AGENTS.md, …) to integrate, not contradict. */
   existingDocs?: readonly GeneratedFile[];
   /** Model identifier forwarded verbatim to the assistant CLI; its default when omitted. */
@@ -241,6 +243,20 @@ function assertMustKeepSurvive(
   for (const command of mustKeep) {
     if (originalText.includes(command) && !enrichedText.includes(command)) {
       throw new SecurityValidationError(`assistant dropped a canonical command: ${command}`);
+    }
+  }
+}
+
+function assertProtectedStatementsSurvive(
+  enriched: GeneratedFile[],
+  originals: GeneratedFile[],
+  protectedStatements: readonly string[]
+): void {
+  for (let index = 0; index < originals.length; index++) {
+    for (const statement of protectedStatements) {
+      if (originals[index].content.includes(statement) && !enriched[index].content.includes(statement)) {
+        throw new SecurityValidationError(`assistant changed maintainer-provided context: ${statement}`);
+      }
     }
   }
 }
@@ -404,7 +420,7 @@ export async function enrichFilesWithAssistant(
   options: EnrichOptions = {}
 ): Promise<GeneratedFile[]> {
   const {
-    execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], existingDocs = [], model,
+    execFn = defaultExecFn, lang = "es", cwd, mustKeep = [], protectedStatements = [], existingDocs = [], model,
     maxAttempts = 2, onMetrics,
   } = options;
   const existingDocsJson = existingDocs.length > 0 ? JSON.stringify(existingDocs) : undefined;
@@ -431,6 +447,7 @@ export async function enrichFilesWithAssistant(
         outputChars += result.stdout.length;
         let parsed = parseAssistantBatch(result.stdout, batch);
         assertMustKeepSurvive(parsed, batch, mustKeep);
+        assertProtectedStatementsSurvive(parsed, batch, protectedStatements);
         assertNoNewDangerousInstructions(parsed, batch);
         assertNewBulletClaimsCiteEvidence(parsed, batch);
         assertNoPromptInjectionLanguage(parsed, batch);

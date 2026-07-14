@@ -15,6 +15,21 @@ Local conventions are extracted conservatively from:
 
 Every fact stores its statement, evidence files, scope and confidence. `--json` exposes the same model used by the renderers.
 
+## Maintainer context
+
+Repository facts and maintainer intent are deliberately different inputs. Facts are
+high-confidence observations with source paths; intent is a human declaration about
+purpose, priorities, boundaries and acceptable assistant autonomy. An optional task
+adds the goal, success criteria, allowed paths and behavior when an unforeseen choice
+appears. The CLI collects these values only through the explicit `--interview` flow or
+a validated `--context-file`.
+
+The renderers preserve that distinction with dedicated sections. Claude, Gemini and
+AGENTS receive complete operational context; Copilot and Cursor receive a concise
+subset. Prompt files include task context when it can personalize the task, even if
+the repository has no high-confidence fact for that category. Enrichment must preserve
+every maintainer statement verbatim, and rejects a batch that changes or drops one.
+
 ## Consumer contracts
 
 - `CLAUDE.md` provides broad project context, declared commands, structure, CI and evidence-backed facts.

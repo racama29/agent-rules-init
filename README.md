@@ -96,6 +96,40 @@ npx agent-rules-init --apply    # activate reviewed staging files, backing up re
 npx agent-rules-init --check    # exit 1 when generated or activated files are missing/outdated
 npx agent-rules-init --json     # emit one machine-readable result
 npx agent-rules-init --non-interactive # skip the AI-enrichment offer
+npx agent-rules-init --interview # answer a short maintainer-context interview
+npx agent-rules-init --context-file ./team-context.yml --dry-run --json # reuse portable context in automation
+```
+
+### Maintainer context
+
+The deterministic scan describes what the repository contains; it cannot know why
+the project exists or what you want changed today. Run `--interview` to add that
+human context: purpose, priorities, assistant roles, autonomy, boundaries, done
+criteria and (optionally) a current task with success criteria, allowed paths and
+fallback behavior.
+
+Permanent answers are saved in `.agent-rules-init.yml` under `intent`. A current task
+is saved only when explicitly confirmed, in the ignored local file
+`.agent-rules-init/task-context.local.yml`. For teams or CI, pass a portable YAML
+file with `--context-file`; it is read-only input. Do not put credentials, tokens or
+personal data in this context: answers are copied into generated assistant rules.
+The generated sections are labeled maintainer statements, not repository evidence.
+
+```yaml
+intent:
+  purpose: Keep the public API stable for platform teams
+  priorities: [correctness, compatibility]
+  assistantRoles: [implementation, testing]
+  autonomy: plan-first
+  boundaries: [Do not change public interfaces without approval]
+  doneCriteria: [All checks pass]
+  decisions: [Node 18 remains supported]
+task:
+  goal: Reduce startup time without reducing detection quality
+  successCriteria: [Startup remains below 100 ms]
+  allowedPaths: [packages/cli]
+  fallback: ask
+  restrictions: [No new runtime dependencies]
 ```
 
 ## Repository configuration

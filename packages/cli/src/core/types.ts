@@ -153,6 +153,36 @@ export interface RepoFacts {
   conventionFacts: ConventionFact[];
 }
 
+export type AssistantAutonomy = "implement" | "plan-first" | "propose-only";
+export type TaskFallback = "conservative" | "ask" | "propose";
+
+/** Durable project direction explicitly supplied by a maintainer. */
+export interface MaintainerIntent {
+  purpose: string;
+  priorities: string[];
+  assistantRoles: string[];
+  autonomy: AssistantAutonomy;
+  boundaries: string[];
+  doneCriteria: string[];
+  decisions: string[];
+}
+
+/** Short-lived objective. It is never presented as an observed repository fact. */
+export interface TaskContext {
+  goal: string;
+  successCriteria: string[];
+  allowedPaths: string[];
+  fallback: TaskFallback;
+  restrictions: string[];
+}
+
+/** The single context object consumed by renderers and optional enrichment. */
+export interface ProjectContext {
+  facts: RepoFacts;
+  intent?: MaintainerIntent;
+  task?: TaskContext;
+}
+
 export interface PackContext {
   facts: RepoFacts;
   /** Señales del mismo alcance que facts; permite evitar canónicos de otro stack. */

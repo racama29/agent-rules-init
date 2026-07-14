@@ -23,6 +23,11 @@ Use `--lang es` or `--lang en` to select the output language. See the [full docu
 
 Automation is supported through `--dry-run`, `--force`, `--apply`, `--check`, `--json` and `--non-interactive`. Enrichment preferences and per-project overrides can be stored in `.agent-rules-init.yml`, but only an explicit `--enrich` invocation can start an assistant.
 
+Use `--interview` to add maintainer purpose, priorities, boundaries and a current
+task to the generated context. Permanent intent is stored in `.agent-rules-init.yml`;
+portable validated YAML can be supplied with `--context-file`. Do not include secrets
+in these answers because maintainer statements are copied into generated files.
+
 Use `--apply` after review to activate staging files; replaced finals are backed up under `.agent-rules-init/backups/`.
 
 Complete generations store a git-ignored hash receipt so `--check` can verify deterministic or enriched active files without rerunning an assistant. Activated final files take precedence over staging during checks.

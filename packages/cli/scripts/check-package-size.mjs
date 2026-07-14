@@ -3,10 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const MAX_PACKED_BYTES = 40 * 1024;
+// The optional maintainer interview is shipped as a lazy chunk. Keep the budget
+// bounded while allowing that user-facing flow to remain self-contained.
+const MAX_PACKED_BYTES = 48 * 1024;
 // README, license and the 15 on-demand pack chunks are part of the public artifact.
 // This is still roughly half the pre-bundle footprint while retaining every stack.
-const MAX_UNPACKED_BYTES = 125 * 1024;
+const MAX_UNPACKED_BYTES = 140 * 1024;
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rules-init-size-"));
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("npm_execpath is required to check package size");

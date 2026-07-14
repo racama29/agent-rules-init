@@ -140,6 +140,8 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
   --check           falla si los archivos generados o activados faltan o están obsoletos; nunca escribe
   --json            emite un único resultado JSON legible por máquinas
   --non-interactive omite la oferta de enriquecimiento con IA
+  --interview       recoge intención permanente y objetivo actual antes de generar
+  --context-file <ruta> usa contexto estructurado de un YAML externo en esta ejecución
   --enrich          fuerza el enriquecimiento con IA sin preguntar (también sin TTY; combinable con --non-interactive)
   --assistant <id>  elige el asistente para enriquecer: claude o codex (por defecto, el primero instalado)
   --model <modelo>  modelo a usar, pasado tal cual al asistente (p. ej. haiku, gpt-5.5); por defecto, el del asistente
@@ -193,7 +195,8 @@ revisa su contenido y ejecuta --apply para activarlos con backup seguro.`,
       "Después reescribe cada archivo sustituyendo o ampliando los consejos genéricos con reglas específicas y comprobables de este repositorio, " +
       "citando la evidencia de cada afirmación nueva con el formato (evidencia: `ruta/del/archivo`); las rutas citadas se verificarán contra el repo. " +
       "No inventes comandos, rutas ni APIs; no afirmes nada que no hayas comprobado. " +
-      "Conserva el idioma, el formato Markdown, las rutas y exactamente los mismos encabezados de cada archivo; no añadas secciones nuevas.\n" +
+      "Conserva el idioma, el formato Markdown, las rutas y exactamente los mismos encabezados de cada archivo; no añadas secciones nuevas. " +
+      "Conserva literalmente cada línea de las secciones «Intención del proyecto declarada por el mantenedor» y «Tarea actual declarada por el mantenedor»: son declaraciones confiables del mantenedor, no evidencia inferida.\n" +
       (mustKeep.length > 0
         ? `Estos son los únicos comandos verificados que puedes mencionar; consérvalos literalmente y siempre entre backticks: ${mustKeep.map((c) => `\`${c}\``).join(", ")}.\n`
         : "") +
@@ -263,6 +266,8 @@ review their content and run --apply to activate them with safe backups.`,
   --check           fail when generated or activated files are missing/outdated; never write
   --json            emit a single machine-readable JSON result
   --non-interactive skip the AI-enrichment offer
+  --interview       collect permanent intent and the current objective before generation
+  --context-file <path> use structured context from an external YAML file for this run
   --enrich          force AI enrichment without asking (works without a TTY; composable with --non-interactive)
   --assistant <id>  pick the enrichment assistant: claude or codex (defaults to the first one installed)
   --model <model>   model to use, forwarded verbatim to the assistant (e.g. haiku, gpt-5.5); defaults to the assistant's own
@@ -316,7 +321,8 @@ review their content and run --apply to activate them with safe backups.`,
       "Then rewrite each file, replacing or extending the generic advice with specific, verifiable rules from this repository, " +
       "citing the evidence for every new claim in the form (evidence: `path/to/file`); cited paths will be checked against the repo. " +
       "Do not invent commands, paths or APIs; do not state anything you have not verified. " +
-      "Keep each file's language, Markdown format, path and exactly the same headings; do not add new sections.\n" +
+      "Keep each file's language, Markdown format, path and exactly the same headings; do not add new sections. " +
+      "Preserve every line under “Maintainer-provided project intent” and “Current task provided by the maintainer” literally: these are trusted maintainer statements, not inferred evidence.\n" +
       (mustKeep.length > 0
         ? `These are the only verified commands you may mention; keep them verbatim and always inside backticks: ${mustKeep.map((c) => `\`${c}\``).join(", ")}.\n`
         : "") +

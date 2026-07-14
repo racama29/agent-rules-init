@@ -55,3 +55,18 @@ returns invalid content or fails a security check.
 
 For large monorepos, configure `scanMaxDepth` and `scanMaxFiles` and inspect
 `scanStats`/`scanWarnings` in JSON output.
+
+## Add the maintainer's intent
+
+When stack detection is not enough, run the explicit interview from a terminal:
+
+```bash
+npx agent-rules-init --interview
+```
+
+It writes permanent project intent to `.agent-rules-init.yml` and can optionally
+save the current task to the ignored `.agent-rules-init/task-context.local.yml`.
+Use `--context-file ./team-context.yml` to provide validated YAML context without
+modifying the repository. Review the generated maintainer sections alongside the
+evidence sections before `--apply`. Never put secrets in the context file because
+its statements are copied into generated assistant rules.

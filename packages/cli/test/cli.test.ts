@@ -107,6 +107,17 @@ describe("resolveCliAction", () => {
     expect(resolveCliAction(["--model", "gpt-5.5"])).toEqual({ kind: "run", model: "gpt-5.5" });
   });
 
+  it("parses the explicit interview and portable context options", () => {
+    expect(resolveCliAction(["--interview"])).toEqual({ kind: "run", interview: true });
+    expect(resolveCliAction(["--context-file", "team-context.yml"])).toEqual({
+      kind: "run", contextFile: "team-context.yml",
+    });
+    expect(resolveCliAction(["--context-file=team-context.yml"])).toEqual({
+      kind: "run", contextFile: "team-context.yml",
+    });
+    expect(resolveCliAction(["--context-file"])).toEqual({ kind: "missing-value", flag: "--context-file" });
+  });
+
   it("rejects an invalid --assistant value and a missing --model value", () => {
     expect(resolveCliAction(["--assistant", "cursor"])).toEqual({ kind: "invalid-assistant", value: "cursor" });
     expect(resolveCliAction(["--model"])).toEqual({ kind: "missing-value", flag: "--model" });
@@ -147,6 +158,55 @@ describe("automation output", () => {
       process.exitCode = originalExitCode;
       cwd.mockRestore();
       log.mockRestore();
+    }
+  });
+
+  it("imports portable maintainer context while keeping JSON output machine-readable", async () => {
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    fs.writeFileSync(path.join(tmpDir, "team-context.yml"), `
+intent:
+  purpose: Keep the CLI predictable for platform teams
+  priorities: [correctness]
+  autonomy: plan-first
+  boundaries: [Do not break the public API]
+task:
+  goal: Review the release path
+  successCriteria: [No regressions]
+  fallback: ask
+`);
+    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmpDir);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--dry-run", "--json", "--context-file", "team-context.yml"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      const output = JSON.parse(String(log.mock.calls[0][0]));
+      expect(output.configWarnings).toEqual([]);
+      expect(output.results.find((result: { path: string }) => result.path === "CLAUDE.generated.md").content)
+        .toContain("Keep the CLI predictable for platform teams");
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      cwd.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("rejects an interview in automation mode before attempting to prompt", async () => {
+    const originalArgv = process.argv;
+    const originalExitCode = process.exitCode;
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    process.argv = ["node", "agent-rules-init", "--interview", "--json"];
+    process.exitCode = undefined;
+    try {
+      await main();
+      expect(process.exitCode).toBe(1);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("--interview requires"));
+    } finally {
+      process.argv = originalArgv;
+      process.exitCode = originalExitCode;
+      error.mockRestore();
     }
   });
 
@@ -591,6 +651,40 @@ describe("runCli", () => {
 
     const claudeMd = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf-8");
     expect(claudeMd).toContain("react");
+  });
+
+  it("propagates session intent and task context through generated consumers and prompts", async () => {
+    fs.writeFileSync(path.join(tmpDir, "package.json"), JSON.stringify({
+      dependencies: { react: "^18.3.0" },
+      devDependencies: { vitest: "^2.1.0" },
+      scripts: { test: "vitest run" },
+    }));
+    await runCli(tmpDir, {
+      skipLlm: true,
+      lang: "en",
+      intent: {
+        purpose: "Keep the CLI predictable for platform teams",
+        priorities: ["correctness"],
+        assistantRoles: ["implementation"],
+        autonomy: "plan-first",
+        boundaries: ["Do not break the public API"],
+        doneCriteria: ["All checks pass"],
+        decisions: ["Node 18 remains supported"],
+      },
+      task: {
+        goal: "Reduce startup time without reducing detection quality",
+        successCriteria: ["Startup remains below 100 ms"],
+        allowedPaths: ["packages/cli"],
+        fallback: "ask",
+        restrictions: ["No new runtime dependencies"],
+      },
+    });
+    const claude = fs.readFileSync(path.join(tmpDir, "CLAUDE.generated.md"), "utf8");
+    const review = fs.readFileSync(path.join(tmpDir, ".claude/commands/js-ts-review.generated.md"), "utf8");
+    expect(claude).toContain("Keep the CLI predictable for platform teams");
+    expect(claude).toContain("Reduce startup time without reducing detection quality");
+    expect(review).toContain("Current task provided by the maintainer");
+    expect(review).toContain("No new runtime dependencies");
   });
 
   it("does not ask users to identify low-confidence project metadata", async () => {
