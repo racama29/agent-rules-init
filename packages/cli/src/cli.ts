@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import type { MultiSelectOptions, SelectOptions } from "@clack/prompts";
+import type * as Clack from "@clack/prompts";
 import { scanRepo } from "./core/scanner.js";
 import { writeGeneratedFiles, type GeneratedFile, type WriteResult } from "./core/writer.js";
 import {
@@ -314,6 +315,54 @@ export function getVersion(): string {
   return pkg.version;
 }
 
+interface ClackIo {
+  select: typeof Clack.select;
+  multiselect: typeof Clack.multiselect;
+  text: typeof Clack.text;
+  confirm: typeof Clack.confirm;
+  note: typeof Clack.note;
+  isCancel: typeof Clack.isCancel;
+}
+
+/** Wires the maintainer interview's IO contract to @clack/prompts. Exported for direct testing. */
+export function createInterviewIo(clack: ClackIo, lang: Lang): InterviewIo {
+  return {
+    async select<T extends string>(options: {
+      message: string; options: InterviewOption<T>[]; initialValue?: T;
+    }) {
+      const value = await clack.select<T>(options as SelectOptions<T>);
+      return clack.isCancel(value) ? undefined : value;
+    },
+    async multiselect<T extends string>(options: {
+      message: string; options: InterviewOption<T>[]; initialValues?: T[]; maxItems?: number; required?: boolean;
+    }) {
+      const value = await clack.multiselect<T>(options as MultiSelectOptions<T>);
+      return clack.isCancel(value) ? undefined : value;
+    },
+    text: async (options) => {
+      const value = await clack.text({
+        message: options.message, placeholder: options.placeholder, initialValue: options.initialValue,
+        // Without this, @clack/prompts resolves an empty submit to `undefined` —
+        // indistinguishable from the user cancelling the whole interview with Ctrl-C.
+        defaultValue: "",
+        validate: (input) => {
+          if (options.required && !input.trim()) return lang === "es" ? "Esta respuesta es obligatoria." : "This answer is required.";
+          if (options.minLength && input.trim().length < options.minLength) {
+            return lang === "es" ? `Escribe al menos ${options.minLength} caracteres.` : `Enter at least ${options.minLength} characters.`;
+          }
+          return undefined;
+        },
+      });
+      return clack.isCancel(value) ? undefined : value;
+    },
+    confirm: async (options) => {
+      const value = await clack.confirm(options);
+      return clack.isCancel(value) ? undefined : value;
+    },
+    note: (message, title) => clack.note(message, title),
+  };
+}
+
 export async function main(): Promise<void> {
   const action = resolveCliAction(process.argv.slice(2));
   const defaultLang = action.kind === "run" && action.lang ? action.lang : detectLang();
@@ -407,38 +456,7 @@ export async function main(): Promise<void> {
         .filter((value): value is NonNullable<typeof value> => value !== null)
         .map((detection) => detection.language);
       const previewFacts = buildRepoFacts(previewSignals, lang);
-      const interviewIo: InterviewIo = {
-        async select<T extends string>(options: {
-          message: string; options: InterviewOption<T>[]; initialValue?: T;
-        }) {
-          const value = await clack!.select<T>(options as SelectOptions<T>);
-          return clack!.isCancel(value) ? undefined : value;
-        },
-        async multiselect<T extends string>(options: {
-          message: string; options: InterviewOption<T>[]; initialValues?: T[]; maxItems?: number; required?: boolean;
-        }) {
-          const value = await clack!.multiselect<T>(options as MultiSelectOptions<T>);
-          return clack!.isCancel(value) ? undefined : value;
-        },
-        text: async (options) => {
-          const value = await clack!.text({
-            message: options.message, placeholder: options.placeholder, initialValue: options.initialValue,
-            validate: (input) => {
-              if (options.required && !input.trim()) return lang === "es" ? "Esta respuesta es obligatoria." : "This answer is required.";
-              if (options.minLength && input.trim().length < options.minLength) {
-                return lang === "es" ? `Escribe al menos ${options.minLength} caracteres.` : `Enter at least ${options.minLength} characters.`;
-              }
-              return undefined;
-            },
-          });
-          return clack!.isCancel(value) ? undefined : value;
-        },
-        confirm: async (options) => {
-          const value = await clack!.confirm(options);
-          return clack!.isCancel(value) ? undefined : value;
-        },
-        note: (message, title) => clack!.note(message, title),
-      };
+      const interviewIo: InterviewIo = createInterviewIo(clack!, lang);
       const interview = await runContextInterview(interviewIo, lang, {
         stacks: [...new Set(stacks)],
         canonicalCommands: previewFacts.canonical

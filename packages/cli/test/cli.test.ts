@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { runCli, resolveCliAction, getVersion, main } from "../src/cli.js";
+import { createInterviewIo, runCli, resolveCliAction, getVersion, main } from "../src/cli.js";
 import type { GeneratedFile } from "../src/core/writer.js";
 import type { RepoFacts } from "../src/core/types.js";
 
@@ -412,6 +412,34 @@ task:
       cwd.mockRestore();
       log.mockRestore();
     }
+  });
+});
+
+describe("createInterviewIo", () => {
+  const CANCEL = Symbol("clack-cancel");
+
+  function fakeClack(textImpl: (options: { defaultValue?: string }) => Promise<unknown>) {
+    return {
+      select: vi.fn(), multiselect: vi.fn(), confirm: vi.fn(), note: vi.fn(),
+      isCancel: (value: unknown) => value === CANCEL,
+      text: textImpl,
+    } as unknown as Parameters<typeof createInterviewIo>[0];
+  }
+
+  it("treats an empty optional answer as an empty string, not a cancellation", async () => {
+    // Mirrors @clack/prompts' own TextPrompt: an empty submit resolves to
+    // `defaultValue` (not `initialValue`), so the wrapper must pass one.
+    const clack = fakeClack(async (options) => options.defaultValue);
+    const io = createInterviewIo(clack, "en");
+
+    await expect(io.text({ message: "What must it not change without approval?" })).resolves.toBe("");
+  });
+
+  it("still reports a cancellation as undefined", async () => {
+    const clack = fakeClack(async () => CANCEL);
+    const io = createInterviewIo(clack, "en");
+
+    await expect(io.text({ message: "What must it not change without approval?" })).resolves.toBeUndefined();
   });
 });
 
